@@ -14,7 +14,7 @@ export interface DialogueRequest {
 
 export type TriggerSpec = { type: 'now' } | { type: 'event'; event: 'lunch_end' } | { type: 'time'; time: string };
 
-export type TaskAction = 'light_off' | 'light_on' | 'tv_off' | 'washer_start' | 'remind';
+export type TaskAction = 'light_off' | 'light_on' | 'tv_off' | 'washer_start' | 'water_plants' | 'remind';
 
 export interface TaskSpec {
   action: TaskAction;

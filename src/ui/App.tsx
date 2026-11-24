@@ -10,7 +10,7 @@ import { EventLog, FamilyPanel, RobotPanel } from './Panels';
 
 const BASE_TICK_MS = 250; // 1× 时每步（10 游戏秒）的真实毫秒数
 const SPEEDS = [1, 2, 4, 8, 16];
-const QUICK_LINES = ['吃完饭帮我看看书房的灯，没人就关掉', '帮我把灯关了', '晚上八点提醒我给奶奶打洗脚水', '今天天气真好'];
+const QUICK_LINES = ['吃完饭帮我看看书房的灯，没人就关掉', '帮我把灯关了', '下午三点帮我给阳台的花浇水', '晚上八点提醒我给奶奶打洗脚水', '今天天气真好'];
 
 export function App() {
   const demoRef = useRef(new DemoLLM(7, [300, 900]));

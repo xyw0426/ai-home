@@ -1,12 +1,16 @@
 export type RoomId =
+  | 'balcony'
   | 'study'
-  | 'kids'
-  | 'master'
-  | 'grandma'
-  | 'corridor'
-  | 'kitchen'
   | 'dining'
-  | 'living';
+  | 'kitchen'
+  | 'kids'
+  | 'living'
+  | 'master'
+  | 'closet'
+  | 'bathroom'
+  | 'grandma'
+  | 'storage'
+  | 'corridor';
 
 export type AgentId = 'dad' | 'mom' | 'grandma' | 'kid' | 'robot';
 export type FamilyId = Exclude<AgentId, 'robot'>;
@@ -20,7 +24,20 @@ export interface Pt {
 export const TICK_SEC = 10;
 export const DAY_SEC = 86400;
 
-export const ROOM_IDS: RoomId[] = ['study', 'kids', 'master', 'grandma', 'corridor', 'kitchen', 'dining', 'living'];
+export const ROOM_IDS: RoomId[] = [
+  'balcony',
+  'study',
+  'dining',
+  'kitchen',
+  'kids',
+  'living',
+  'master',
+  'closet',
+  'bathroom',
+  'grandma',
+  'storage',
+  'corridor',
+];
 export const FAMILY_IDS: FamilyId[] = ['dad', 'mom', 'grandma', 'kid'];
 export const AGENT_IDS: AgentId[] = ['dad', 'mom', 'grandma', 'kid', 'robot'];
 

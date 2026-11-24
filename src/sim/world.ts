@@ -392,6 +392,12 @@ export class World {
       if (p.kind === a.lastKind) w *= 0.25;
       if (p.kind === 'nap' && !(s >= at(13, 0) && s < at(16, 0))) w = 0;
       if (p.kind === 'cook') w = 0; // 做饭只在三餐时间安排
+      if (p.kind === 'bath') w = s >= at(18, 30) ? w * 3 : 0; // 晚上才泡澡
+      if (p.kind === 'wash_up') w = s >= at(20, 0) || s < at(9, 0) ? w * 4 : w * 0.3;
+      if (p.kind === 'listen_piano') w = this.fs.piano.users.length ? w * 3 : 0; // 有人弹琴才去听
+      if (p.kind === 'water_plants' && (this.fs.plants.runUntil ?? 0) > this.t) w = 0; // 刚浇过
+      if (p.kind === 'balcony_tea' && !(s >= at(8, 0) && s < at(18, 0))) w = 0;
+      if (p.kind === 'make_coffee' && s >= at(17, 0)) w *= 0.2;
       return { item: p.kind, w };
     });
     for (let tries = 0; tries < 4 && items.length; tries++) {
@@ -436,10 +442,12 @@ export class World {
     const spec = ACTIVITIES[kind];
     let fid = opts.fid;
     let spot: Pt | null = opts.spot ?? null;
-    if (!fid && spec.furniture) {
-      if (spec.furniture === 'bed') fid = a.persona.bed;
-      else if (spec.furniture === 'seat') fid = 'table';
-      else fid = spec.furniture;
+    // 候选家具：活动可以在多件家具中挑一件（例如书房书架、阅读椅、客厅书柜都能读书）
+    let candidates: string[] = [];
+    if (fid) candidates = [fid];
+    else if (spec.furniture) {
+      const list = Array.isArray(spec.furniture) ? spec.furniture : [spec.furniture];
+      candidates = list.map((x) => (x === 'bed' ? a.persona.bed ?? '' : x === 'seat' ? 'table' : x)).filter(Boolean);
     }
     if (kind === 'visit' || opts.followId) {
       const others = this.family.filter((o) => o !== a && !o.sleeping && !o.controlled);
@@ -454,17 +462,26 @@ export class World {
       }
       return true;
     }
-    if (!spot && fid) {
-      const f = this.map.byId.get(fid);
-      if (!f) return false;
+    if (!spot && candidates.length) {
       if (kind === 'do_laundry' && this.fs.washer.mode === 'running') return false;
       // 自主洗衣服：至少隔 3 小时一次（用户指挥不受限制）
       if (kind === 'do_laundry' && !opts.byUser && this.t - this.lastLaundryAt < 3 * 3600) return false;
       if (kind === 'cook' && this.fs.stove.users.length) return false;
-      spot = this.chooseSpot(a, f);
+      if (kind === 'play_piano' && this.fs.piano.users.length) return false;
+      if (kind === 'water_plants' && !opts.byUser && (this.fs.plants.runUntil ?? 0) > this.t) return false;
+      let best: { fid: string; spot: Pt } | null = null;
+      for (const c of candidates) {
+        const f = this.map.byId.get(c);
+        if (!f) continue;
+        const sp = this.chooseSpot(a, f);
+        if (sp && (!best || dist(sp, a) < dist(best.spot, a))) best = { fid: c, spot: sp };
+      }
+      if (!best) return false;
+      fid = best.fid;
+      spot = best.spot;
     }
     if (!spot && kind === 'wander') {
-      const rooms = this.map.rooms.filter((r) => r.id !== this.roomOfAgent(a) && r.id !== 'corridor');
+      const rooms = this.map.rooms.filter((r) => r.id !== this.roomOfAgent(a) && r.id !== 'corridor' && r.id !== 'storage');
       const r = this.rng.pick(rooms);
       const cells = this.map.roomCells[r.id].filter((i) => this.map.walk[i] === 1);
       spot = this.map.pt(this.rng.pick(cells));
@@ -537,11 +554,25 @@ export class World {
       case 'use_computer':
       case 'cook':
       case 'wash_dishes':
+      case 'play_piano':
+      case 'get_snack':
+      case 'make_coffee':
+      case 'wash_up':
+      case 'bath':
+      case 'listen_radio':
         if (fs) fs.on = true;
         if (act.kind === 'wash_dishes' && this.fs.table.mode === 'dirty') {
           this.fs.table.mode = 'none';
           this.emit('furniture', `${a.name}把餐桌上的碗筷收进了厨房`, a.id, { fid: 'table' });
         }
+        break;
+      case 'water_plants':
+        this.fs.plants.runUntil = this.t + 3 * 3600;
+        this.emit('furniture', `${a.name}给阳台的花浇了水，叶子上挂着水珠`, a.id, { fid: 'plants' });
+        break;
+      case 'read_book':
+        // 在阅读椅上读书：书是从书房书架上取的
+        if (act.fid === 'study_chair' && !this.fs.bookshelf.users.includes(a.id)) this.fs.bookshelf.users.push(a.id);
         break;
       case 'do_laundry': {
         this.lastLaundryAt = this.t;
@@ -591,10 +622,17 @@ export class World {
     if (!act.started) return;
     const fs = act.fid ? this.fs[act.fid] : undefined;
     if (fs) fs.users = fs.users.filter((u) => u !== a.id);
+    if (act.kind === 'read_book') this.fs.bookshelf.users = this.fs.bookshelf.users.filter((u) => u !== a.id);
     switch (act.kind) {
       case 'use_computer':
       case 'cook':
       case 'wash_dishes':
+      case 'play_piano':
+      case 'get_snack':
+      case 'make_coffee':
+      case 'wash_up':
+      case 'bath':
+      case 'listen_radio':
         if (fs && fs.users.length === 0) fs.on = false;
         break;
       case 'watch_tv': {
@@ -648,6 +686,9 @@ export class World {
     } else if (f.type === 'stove') {
       this.fs.stove.on = false;
       this.emit('furniture', `${a.name}关掉了灶台的火`, a.id, { fid });
+    } else if (f.type === 'plants') {
+      this.fs.plants.runUntil = this.t + 3 * 3600;
+      this.emit('furniture', `${a.name}给阳台的花浇了水`, a.id, { fid });
     } else if (f.type === 'washer') {
       const w = this.fs.washer;
       if (w.mode !== 'running') {
@@ -1054,7 +1095,37 @@ export class World {
         if (!isRobot) out.push({ id: 'sofa_rest', label: '坐沙发休息' }, { id: 'watch_tv', label: '坐下看电视' });
         break;
       case 'armchair':
-        if (!isRobot) out.push({ id: 'rest_chair', label: '坐摇椅休息' });
+        if (!isRobot) out.push(f.id === 'rocker' ? { id: 'rest_chair', label: '坐摇椅休息' } : { id: 'read_book', label: '坐下读书' });
+        break;
+      case 'piano':
+        if (!isRobot && !fs.users.length) out.push({ id: 'play_piano', label: '弹钢琴' });
+        break;
+      case 'stool':
+        if (!isRobot) out.push({ id: 'listen_piano', label: this.fs.piano.users.length ? '坐下听钢琴' : '坐一会儿' });
+        break;
+      case 'fridge':
+        if (!isRobot) out.push({ id: 'get_snack', label: '打开冰箱拿零食' });
+        break;
+      case 'coffee':
+        if (!isRobot) out.push({ id: 'make_coffee', label: '冲一杯咖啡' });
+        break;
+      case 'plants':
+        out.push(isRobot ? { id: 'toggle:water_plants', label: '浇花' } : { id: 'water_plants', label: '给花浇水' });
+        break;
+      case 'rattan':
+        if (!isRobot) out.push({ id: 'balcony_tea', label: '坐下喝茶晒太阳' });
+        break;
+      case 'mirror':
+        if (!isRobot) out.push({ id: 'dress_up', label: '试试衣服' });
+        break;
+      case 'basin':
+        if (!isRobot) out.push({ id: 'wash_up', label: '洗漱' });
+        break;
+      case 'bathtub':
+        if (!isRobot) out.push({ id: 'bath', label: '泡个澡' });
+        break;
+      case 'radio':
+        if (!isRobot) out.push({ id: 'listen_radio', label: '听收音机' });
         break;
       case 'toybox':
         if (!isRobot) out.push({ id: 'play_toys', label: '玩积木' });
@@ -1095,6 +1166,26 @@ export class World {
         return fs.mode === 'served' ? `饭菜已上桌${names ? `，${names}在吃` : ''}` : fs.mode === 'dirty' ? '桌上有待收拾的碗筷' : '干净';
       case 'bed':
         return names ? `${names}在床上` : '空着';
+      case 'piano':
+        return names ? `${names}正在弹琴，琴声飘满客厅` : '琴盖合着';
+      case 'fridge':
+        return fs.on ? `门开着，${names}在找吃的` : '关着，嗡嗡运转';
+      case 'coffee':
+        return fs.on ? `正在出咖啡，${names}在等` : '待机';
+      case 'plants': {
+        const left = (fs.runUntil ?? 0) - this.t;
+        return left > 0 ? `刚浇过水（还湿润约${Math.ceil(left / 60)}分钟）${names ? `，${names}在照料` : ''}` : '土有点干了，可以浇水';
+      }
+      case 'radio':
+        return fs.on ? `正在播戏曲，${names}在听` : '关着';
+      case 'bathtub':
+        return fs.on ? `放满了热水，${names}在泡澡` : '空着';
+      case 'basin':
+        return fs.on ? `水龙头开着，${names}在洗漱` : '干净';
+      case 'mirror':
+        return names ? `${names}在镜子前试衣服` : '没人';
+      case 'stool':
+        return names ? `${names}坐在这里` : '空着';
       default:
         return names ? `${names}在用` : '空着';
     }

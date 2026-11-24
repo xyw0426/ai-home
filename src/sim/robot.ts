@@ -1,7 +1,7 @@
 import { ruleParse } from './demo';
 import type { ParseResult, TaskSpec } from './llm';
 import { LongTermMemory, ShortTermMemory } from './memory';
-import { ROOM_NAME, W, H } from './map';
+import { ROOM_NAME, W, H, frontOf } from './map';
 import {
   confirmText,
   logTask,
@@ -675,8 +675,15 @@ export class RobotBrain {
       const l = w.map.lampOf[sp.room!];
       return l ? { fid: l.id, spot: l.spots[0] } : null;
     }
-    if (sp.action === 'tv_off') return { fid: 'tv', spot: { x: 30, y: 19 } };
+    if (sp.action === 'tv_off') {
+      const spot = frontOf(w.map, w.map.byId.get('tv')!);
+      return spot ? { fid: 'tv', spot } : null;
+    }
     if (sp.action === 'washer_start') return { fid: 'washer', spot: w.map.byId.get('washer')!.spots[0] };
+    if (sp.action === 'water_plants') {
+      const spots = w.map.byId.get('plants')!.spots.slice().sort((p, q) => dist(p, this.a) - dist(q, this.a));
+      return { fid: 'plants', spot: spots[0] };
+    }
     return null;
   }
 
@@ -692,6 +699,8 @@ export class RobotBrain {
         return !w.fs.tv.on;
       case 'washer_start':
         return w.fs.washer.mode === 'running';
+      case 'water_plants':
+        return (w.fs.plants.runUntil ?? 0) > w.t;
       default:
         return false;
     }
@@ -732,7 +741,11 @@ export class RobotBrain {
     }
     // 已确认（或无需确认）：检查设备状态
     const lightKnown = this.lightKnown[room];
-    const observed = sp.action === 'light_off' || sp.action === 'light_on' ? !!lightKnown && lightKnown.t >= since : this.visible.has(w.map.idx(dev.spot.x, dev.spot.y));
+    const devCell = w.map.byId.get(dev.fid)!.cells[0];
+    const observed =
+      sp.action === 'light_off' || sp.action === 'light_on'
+        ? !!lightKnown && lightKnown.t >= since
+        : this.visible.has(w.map.idx(devCell.x, devCell.y));
     if (observed && this.targetReached(task)) {
       a.path = [];
       this.finish(task, sp.action === 'light_off' ? `${rn}没人，灯本来就是关着的` : '设备已经是目标状态');
@@ -740,12 +753,12 @@ export class RobotBrain {
     }
     if (this.arrived(dev.spot)) {
       a.path = [];
-      const action = sp.action === 'light_off' ? 'light_off' : sp.action === 'light_on' ? 'light_on' : sp.action === 'tv_off' ? 'tv_off' : 'washer_start';
-      w.applyToggle(a, dev.fid, action);
+      w.applyToggle(a, dev.fid, sp.action);
       let text = '';
       if (sp.action === 'light_off') text = sp.condition === 'room_empty' ? `确认${rn}灯亮着且屋内无人，已关灯` : `已关掉${rn}的灯`;
       else if (sp.action === 'light_on') text = `已打开${rn}的灯`;
       else if (sp.action === 'tv_off') text = '已关掉电视';
+      else if (sp.action === 'water_plants') text = '阳台的花浇好了';
       else text = '洗衣机已启动';
       if (sp.action === 'light_off' && task.requester)
         this.ltm.upsert(

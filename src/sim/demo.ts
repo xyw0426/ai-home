@@ -1,5 +1,6 @@
 import type { DialogueRequest, LLMProvider, ParseRequest, ParseResult, TaskSpec, TriggerSpec } from './llm';
 import type { AgentId, RoomId } from './types';
+import { ROOM_NAME } from './map';
 import { Rng } from './rng';
 
 /* ------------------------------------------------------------------ */
@@ -11,10 +12,14 @@ const ROOM_WORDS: [RegExp, RoomId][] = [
   [/儿童房|乐乐(的)?房间|孩子(的)?房间/, 'kids'],
   [/奶奶(的)?房|奶奶屋|奶奶的屋/, 'grandma'],
   [/主卧|卧室|我们(的)?房间/, 'master'],
-  [/走廊|过道/, 'corridor'],
+  [/走廊|过道|玄关|门口/, 'corridor'],
   [/厨房/, 'kitchen'],
   [/餐厅|饭厅/, 'dining'],
-  [/客厅/, 'living'],
+  [/客厅|大厅/, 'living'],
+  [/阳台/, 'balcony'],
+  [/衣帽间/, 'closet'],
+  [/卫生间|洗手间|浴室|厕所/, 'bathroom'],
+  [/储物间|杂物间/, 'storage'],
 ];
 
 const PERSON_WORDS: [RegExp, AgentId][] = [
@@ -49,7 +54,7 @@ function findTime(text: string): string | null {
 }
 
 export function looksLikeRequest(text: string): boolean {
-  return /帮|麻烦|记得|提醒|关掉|关上|关了|关一下|打开|开一下|开灯|关灯|看看|启动|洗衣|电视|小暖/.test(text);
+  return /帮|麻烦|记得|提醒|关掉|关上|关了|关一下|打开|开一下|开灯|关灯|看看|启动|洗衣|电视|浇花|浇水|小暖/.test(text);
 }
 
 export function ruleParse(req: ParseRequest): ParseResult {
@@ -89,8 +94,12 @@ export function ruleParse(req: ParseRequest): ParseResult {
     return { kind: 'task', task: { action: 'remind', target, message, trigger, condition: 'none' } };
   }
 
+  if (/浇花|浇水|浇浇|给.{0,6}花/.test(text)) {
+    return { kind: 'task', task: { action: 'water_plants', room: 'balcony', trigger, condition: 'none' } };
+  }
+
   if (/洗衣机|洗衣服|把衣服洗/.test(text)) {
-    return { kind: 'task', task: { action: 'washer_start', room: 'kitchen', trigger, condition: 'none' } };
+    return { kind: 'task', task: { action: 'washer_start', room: 'bathroom', trigger, condition: 'none' } };
   }
 
   if (/电视/.test(text) && /关/.test(text)) {
@@ -110,7 +119,7 @@ export function ruleParse(req: ParseRequest): ParseResult {
 }
 
 function roomLabel(r: RoomId): string {
-  return { study: '书房', kids: '儿童房', master: '卧室', grandma: '奶奶房', corridor: '走廊', kitchen: '厨房', dining: '餐厅', living: '客厅' }[r];
+  return ROOM_NAME[r];
 }
 
 /* ------------------------------------------------------------------ */
@@ -166,7 +175,22 @@ const REPLY: Record<AgentId, string[]> = {
   robot: ['好的，有需要随时叫我。', '收到，我会留意的。', '没问题。'],
 };
 
+/** 看到对方正在做的事时说的话 */
+const ACTIVITY_LINES: [RegExp, string[]][] = [
+  [/弹钢琴/, ['{L}，这首曲子真好听，再弹一遍吧！', '{L}，琴弹得越来越好了。', '{L}，弹的是什么曲子呀？']],
+  [/听钢琴/, ['{L}，一起听会儿琴吧。']],
+  [/冰箱|零食/, ['{L}，又去冰箱找零食啦？快吃饭了，少吃点。', '{L}，冰箱里有新买的酸奶。']],
+  [/咖啡/, ['{L}，又冲咖啡？下午喝多了晚上睡不着。', '{L}，咖啡好香，给我也来一杯。']],
+  [/浇水/, ['{L}，阳台的花开得真好，都是你照顾的功劳。']],
+  [/喝茶/, ['{L}，阳台晒太阳真舒服吧？']],
+  [/收音机|戏曲/, ['{L}，又在听戏呢？这段唱得真好。']],
+  [/试衣服/, ['{L}，这件衣服挺好看的！']],
+  [/积木/, ['{L}，你搭的是什么呀？']],
+  [/电脑/, ['{L}，别老盯着电脑，起来活动活动。']],
+];
+
 const ROBOT_REQUESTS: { from: AgentId; text: string }[] = [
+  { from: 'grandma', text: '小暖，下午三点帮我给阳台的花浇浇水。' },
   { from: 'mom', text: '小暖，晚上八点提醒我把阳台的衣服收进来。' },
   { from: 'grandma', text: '小暖，晚上七点帮我把我房间的灯打开。' },
   { from: 'kid', text: '小暖，帮我把洗衣机打开，我的球衣要洗。' },
@@ -203,6 +227,10 @@ export function demoLine(req: DialogueRequest, rng: Rng, used: Set<string>): str
       used.add(r.text);
       return r.text;
     }
+  }
+  if (!/午饭/.test(req.scene) && sp !== 'robot' && rng.chance(0.6)) {
+    const hit = ACTIVITY_LINES.find(([re]) => re.test(req.listener.activity));
+    if (hit) return pickUnused(hit[1], rng, used).replace('{L}', L);
   }
   const raw = /午饭/.test(req.scene) ? LUNCH[sp] : OPEN[sp];
   const pool = raw

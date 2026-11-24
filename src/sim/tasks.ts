@@ -2,7 +2,7 @@ import type { TaskSpec, TriggerSpec } from './llm';
 import { ROOM_NAME } from './map';
 import { PERSONAS } from './personas';
 import type { AgentId, Pt, RoomId } from './types';
-import { hm } from './types';
+import { ROOM_IDS, hm } from './types';
 
 export type TaskStatus = 'pending' | 'due' | 'active' | 'waiting' | 'done' | 'cancelled';
 
@@ -56,6 +56,8 @@ export function taskTitle(spec: TaskSpec): string {
       return `关客厅电视${cond}`;
     case 'washer_start':
       return '启动洗衣机';
+    case 'water_plants':
+      return '给阳台的花浇水';
     case 'remind':
       return `提醒${spec.target ? PERSONAS[spec.target].name : ''}：${spec.message ?? ''}`;
   }
@@ -74,7 +76,9 @@ export function confirmText(spec: TaskSpec, speaker: AgentId): string {
     case 'tv_off':
       return spec.condition === 'room_empty' ? `好的，${when}去客厅看看，没人看就关电视。` : `好的，${when}去关电视。`;
     case 'washer_start':
-      return `好的，${when}去把洗衣机启动。`;
+      return `好的，${when}去卫生间把洗衣机启动。`;
+    case 'water_plants':
+      return `好的，${when}去阳台给花浇水。`;
     case 'remind': {
       const who = spec.target === speaker ? '您' : spec.target ? PERSONAS[spec.target].name : '';
       return `好的，${when}提醒${who}${spec.message ?? ''}。`;
@@ -84,8 +88,8 @@ export function confirmText(spec: TaskSpec, speaker: AgentId): string {
 
 export type Validation = { ok: true; spec: TaskSpec; note?: string } | { ok: false; question: string };
 
-const ACTIONS = ['light_off', 'light_on', 'tv_off', 'washer_start', 'remind'];
-const ROOMS: RoomId[] = ['study', 'kids', 'master', 'grandma', 'corridor', 'kitchen', 'dining', 'living'];
+const ACTIONS = ['light_off', 'light_on', 'tv_off', 'washer_start', 'water_plants', 'remind'];
+const ROOMS: RoomId[] = ROOM_IDS;
 const PEOPLE: AgentId[] = ['dad', 'mom', 'grandma', 'kid'];
 
 /**
@@ -103,7 +107,8 @@ export function validateSpec(raw: TaskSpec, speaker: AgentId, lunchDone: boolean
     condition: raw.condition === 'room_empty' ? 'room_empty' : 'none',
   };
   if (spec.action === 'tv_off') spec.room = 'living';
-  if (spec.action === 'washer_start') spec.room = 'kitchen';
+  if (spec.action === 'washer_start') spec.room = 'bathroom';
+  if (spec.action === 'water_plants') spec.room = 'balcony';
   if (spec.action === 'light_off' || spec.action === 'light_on') {
     if (!spec.room) return { ok: false, question: `要${spec.action === 'light_off' ? '关' : '开'}哪个房间的灯呢？` };
     if (!ROOMS.includes(spec.room)) return { ok: false, question: '家里好像没有这个房间，你说的是哪一间？' };

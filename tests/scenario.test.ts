@@ -45,22 +45,38 @@ describe('地图与视线', () => {
   test('墙阻挡视线，门洞不阻挡', () => {
     const w = demoWorld();
     const m = w.map;
-    // 走廊(3,10) 看书房(3,7)：中间是墙
-    expect(m.los(3, 10, 3, 7)).toBe(false);
-    // 走廊(5,10) 透过书房门(5,9) 看见(5,6)
-    expect(m.los(5, 10, 5, 6)).toBe(true);
-    const vis = new Set(m.visibleFrom({ x: 5, y: 11 }));
-    expect(vis.has(m.idx(5, 6))).toBe(true);
-    expect(vis.has(m.idx(2, 6))).toBe(false);
-    // 机器人视角：放在走廊时看不到书房深处的爸爸
-    w.place('robot', 12, 10);
+    // 客厅(11,12) 看书房(8,12)：中间隔着书房的墙
+    expect(m.los(11, 12, 8, 12)).toBe(false);
+    // 餐厅(8,18) 透过书房门(8,16) 看见书房里的(8,13)
+    expect(m.los(8, 18, 8, 13)).toBe(true);
+    const vis = new Set(m.visibleFrom({ x: 8, y: 18 }));
+    expect(vis.has(m.idx(8, 13))).toBe(true);
+    expect(vis.has(m.idx(6, 14))).toBe(false);
+    // 屋外空地也挡视线、不能走
+    expect(m.isWall(2, 2)).toBe(true);
+    expect(m.isWalkable(2, 2)).toBe(false);
+    // 机器人视角：站在客厅时看不到书房里用电脑的爸爸
+    w.place('robot', 13, 12);
     w.robot.perceive();
     expect(w.robot.sees('dad')).toBe(false);
   });
 
+  test('参照户型图的房间都在，墙自动围起来', () => {
+    const w = demoWorld();
+    const names = w.map.rooms.map((r) => r.name);
+    for (const n of ['阳台', '书房', '餐厅', '厨房', '儿童房', '客厅', '主卧', '衣帽间', '卫生间', '奶奶房', '储物间', '玄关走廊']) expect(names).toContain(n);
+    // 每个房间都能从充电座走到，并且有灯
+    const dock = w.map.byId.get('dock')!.spots[0];
+    for (const r of w.map.rooms) {
+      expect(w.map.lampOf[r.id], r.id).toBeTruthy();
+      const cell = w.map.pt(w.map.roomCells[r.id].find((i) => w.map.walk[i] === 1)!);
+      expect(w.map.bfs(dock, cell), r.id).not.toBeNull();
+    }
+  });
+
   test('所有家具使用位置都可以从充电座走到', () => {
     const w = demoWorld();
-    const dock = { x: 36, y: 10 };
+    const dock = w.map.byId.get('dock')!.spots[0];
     for (const f of w.map.furniture) for (const s of f.spots) expect(w.map.bfs(dock, s), `${f.id} (${s.x},${s.y})`).not.toBeNull();
   });
 });
@@ -73,7 +89,7 @@ describe('验收场景（演示模式）', () => {
     expect(roomOf('mom')).toBe('kitchen');
     expect(roomOf('kid')).toBe('kids');
     expect(roomOf('grandma')).toBe('living');
-    expect(roomOf('robot')).toBe('corridor');
+    expect(roomOf('robot')).toBe('storage');
     await runUntil(w, () => tod(w.t) >= at(12, 15));
     const starts = w.events.filter((e) => e.type === 'activity_start' && e.data?.fid);
     const fids = new Set(starts.map((e) => e.data!.fid));
@@ -157,13 +173,17 @@ describe('验收场景（演示模式）', () => {
   test('4. 快进到夜间，家人回到各自床位睡觉', async () => {
     const w = demoWorld();
     await runUntil(w, () => tod(w.t) >= at(21, 50));
-    const beds: Record<string, [number, number]> = { dad: [24, 1], mom: [25, 1], grandma: [35, 1], kid: [17, 1] };
+    const beds: Record<string, [number, number]> = {};
+    for (const f of w.map.furniture)
+      if (f.type === 'bed') f.owners!.forEach((o, i) => (beds[o] = [f.spots[i].x, f.spots[i].y]));
+    expect(Object.keys(beds).sort()).toEqual(['dad', 'grandma', 'kid', 'mom']);
     for (const [id, [x, y]] of Object.entries(beds)) {
       const a = w.agents[id as AgentId];
       expect([a.name, a.x, a.y, a.sleeping]).toEqual([a.name, x, y, true]);
     }
     await runUntil(w, () => tod(w.t) >= at(22, 40));
-    expect([w.agents.robot.x, w.agents.robot.y]).toEqual([36, 10]);
+    const dock = w.map.byId.get('dock')!.spots[0];
+    expect([w.agents.robot.x, w.agents.robot.y]).toEqual([dock.x, dock.y]);
     expect(w.robot.todo.find((t) => t.recurring)?.status).toBe('done');
   });
 
@@ -220,8 +240,9 @@ describe('巡视与自主关灯', () => {
       if (w.map.roomAt(r.x, r.y) === 'corridor') xs.add(r.x);
       return tod(w.t) >= at(15, 0);
     });
-    expect(Math.min(...xs)).toBe(1);
-    expect(Math.max(...xs)).toBe(36);
+    const corridor = w.map.room('corridor');
+    expect(Math.min(...xs)).toBe(corridor.x0);
+    expect(Math.max(...xs)).toBe(corridor.x1);
     // 巡视点不占用家人的座位、开关等使用位置
     // （充电座是机器人自己的位置，允许）
     const spots = new Set(w.map.furniture.filter((f) => f.type !== 'dock').flatMap((f) => f.spots.map((p) => `${p.x},${p.y}`)));
@@ -292,5 +313,56 @@ describe('做饭时间', () => {
       return COOK_WINDOWS.some((c) => s >= c.start && s < c.end);
     };
     expect(starts.every(inWindow)).toBe(true);
+  });
+});
+
+describe('新家具', () => {
+  test('家人一天里会用到钢琴、冰箱、咖啡机、花架等新家具，并且有可观察的状态变化', async () => {
+    const w = demoWorld();
+    const used = new Map<string, string>();
+    const seen = { piano: false, fridge: false, coffee: false, plants: false, radio: false };
+    w.onEvent((e) => {
+      if (e.type === 'activity_start' && e.data?.fid && e.actor) used.set(String(e.data.fid), `${hm(e.t)} ${e.text}`);
+    });
+    await runUntil(w, () => {
+      if (w.fs.piano.on) seen.piano = true;
+      if (w.fs.fridge.on) seen.fridge = true;
+      if (w.fs.coffee.on) seen.coffee = true;
+      if ((w.fs.plants.runUntil ?? 0) > w.t) seen.plants = true;
+      if (w.fs.radio.on) seen.radio = true;
+      return tod(w.t) >= at(21, 0);
+    }, 30000);
+    const newOnes = ['piano', 'fridge', 'coffee', 'plants', 'rattan', 'mirror', 'basin', 'bathtub', 'radio', 'stools'].filter((f) => used.has(f));
+    console.log('用到的新家具：', newOnes.map((f) => used.get(f)).join(' | '));
+    expect(newOnes.length).toBeGreaterThanOrEqual(5);
+    expect(Object.values(seen).filter(Boolean).length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('接管角色后可以弹钢琴、开冰箱，状态随之变化', async () => {
+    const w = demoWorld();
+    w.takeControl('kid');
+    expect(w.furnitureActions(w.map.byId.get('piano')!, w.agents.kid).map((a) => a.id)).toContain('play_piano');
+    w.commandInteract('piano', 'play_piano');
+    await runUntil(w, () => w.fs.piano.on, minutes(30));
+    expect(w.fs.piano.users).toEqual(['kid']);
+    expect(w.furnitureStatus(w.map.byId.get('piano')!)).toMatch(/乐乐正在弹琴/);
+    w.commandInteract('fridge', 'get_snack');
+    expect(w.fs.piano.on).toBe(false);
+    await runUntil(w, () => w.fs.fridge.on, minutes(30));
+    expect(w.furnitureStatus(w.map.byId.get('fridge')!)).toMatch(/门开着/);
+  });
+
+  test('机器人能听懂“帮我给阳台的花浇水”并去阳台浇花', async () => {
+    const w = demoWorld();
+    w.fs.plants.runUntil = 0;
+    w.robot.hear('grandma', '小暖，帮我给阳台的花浇浇水');
+    await runTicks(w, 2);
+    const task = w.robot.todo.find((t) => t.spec.action === 'water_plants');
+    expect(task?.spec.room).toBe('balcony');
+    const ok = await runUntil(w, () => task!.status === 'done', minutes(90));
+    expect(ok).toBe(true);
+    expect(w.fs.plants.runUntil!).toBeGreaterThan(w.t);
+    const r = w.agents.robot;
+    expect(w.map.roomAt(r.x, r.y)).toBe('balcony');
   });
 });
