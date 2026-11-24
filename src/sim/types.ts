@@ -6,7 +6,7 @@ export type RoomId =
   | 'kids'
   | 'living'
   | 'master'
-  | 'closet'
+  | 'theater'
   | 'bathroom'
   | 'grandma'
   | 'storage'
@@ -32,7 +32,7 @@ export const ROOM_IDS: RoomId[] = [
   'kids',
   'living',
   'master',
-  'closet',
+  'theater',
   'bathroom',
   'grandma',
   'storage',

@@ -27,6 +27,7 @@ export type ActivityKind =
   | 'wash_up'
   | 'bath'
   | 'listen_radio'
+  | 'watch_movie'
   | 'user_move'
   | 'user_toggle';
 
@@ -59,12 +60,13 @@ export const ACTIVITIES: Record<ActivityKind, ActivitySpec> = {
   listen_piano: { label: '坐在琴边听钢琴', icon: '🎶', furniture: 'stools', dur: [10, 20] },
   get_snack: { label: '从冰箱拿零食', icon: '🧃', furniture: 'fridge', dur: [3, 5] },
   make_coffee: { label: '冲咖啡', icon: '☕', furniture: 'coffee', dur: [4, 7] },
-  water_plants: { label: '给阳台的花浇水', icon: '🪴', furniture: 'plants', dur: [6, 10] },
+  water_plants: { label: '给阳台的花浇水', icon: '🪴', furniture: ['planter_l', 'planter_r', 'planter_bl', 'planter_br'], dur: [4, 7] },
   balcony_tea: { label: '在阳台喝茶晒太阳', icon: '🍵', furniture: 'rattan', dur: [20, 40] },
-  dress_up: { label: '在衣帽间试衣服', icon: '👗', furniture: 'mirror', dur: [8, 15] },
+  dress_up: { label: '在主卧照镜子试衣服', icon: '👗', furniture: 'mirror', dur: [8, 15] },
   wash_up: { label: '洗漱', icon: '🪥', furniture: 'basin', dur: [4, 7] },
   bath: { label: '泡澡', icon: '🛁', furniture: 'bathtub', dur: [20, 30] },
   listen_radio: { label: '听收音机里的戏曲', icon: '📻', furniture: 'radio', dur: [20, 40] },
+  watch_movie: { label: '在影音室看电影', icon: '🎬', furniture: 'theater_sofa', dur: [40, 80] },
   user_move: { label: '按指令移动', icon: '🎮', dur: [0, 0] },
   user_toggle: { label: '按指令操作', icon: '🎮', dur: [0, 0] },
 };
@@ -91,7 +93,7 @@ export const PERSONAS: Record<AgentId, Persona> = {
     id: 'dad',
     name: '爸爸',
     role: '爸爸',
-    desc: '林爸爸，42岁，程序员，周末也常在书房用电脑或看书；喜欢去餐厅的咖啡机冲杯咖啡，偶尔在阳台藤椅上喝茶，会弹两下钢琴但弹得不太好；说话温和，偶尔冷幽默，常常忘记关灯。',
+    desc: '林爸爸，42岁，程序员，在家办公，常在自己的工作室（书房）用电脑或看书，晚上爱去影音室看电影；喜欢去餐厅的咖啡机冲杯咖啡，偶尔在阳台藤椅上喝茶，会弹两下钢琴但弹得不太好；说话温和，偶尔冷幽默，常常忘记关灯。',
     color: '#4f7fb3',
     hair: '#33251c',
     homeRoom: 'study',
@@ -105,6 +107,7 @@ export const PERSONAS: Record<AgentId, Persona> = {
       { kind: 'get_snack', w: 1 },
       { kind: 'play_piano', w: 0.4 },
       { kind: 'listen_piano', w: 1 },
+      { kind: 'watch_movie', w: 1 },
       { kind: 'visit', w: 1 },
       { kind: 'wander', w: 0.6 },
     ],
@@ -115,7 +118,7 @@ export const PERSONAS: Record<AgentId, Persona> = {
     id: 'mom',
     name: '妈妈',
     role: '妈妈',
-    desc: '林妈妈，38岁，中学语文老师，负责一家的三餐，钢琴弹得很好；喜欢在衣帽间搭配衣服、给阳台的花浇水、打理家务，做事利落，关心每个家人。',
+    desc: '林妈妈，38岁，中学语文老师，负责一家的三餐，钢琴弹得很好；喜欢在主卧的穿衣镜前搭配衣服、照料阳台上的一大片绿植（叶子发黄就赶紧浇水）、打理家务，做事利落，关心每个家人。',
     color: '#d4685a',
     hair: '#4a2a1e',
     homeRoom: 'kitchen',
@@ -123,6 +126,7 @@ export const PERSONAS: Record<AgentId, Persona> = {
     prefs: [
       { kind: 'play_piano', w: 2 },
       { kind: 'water_plants', w: 1.5 },
+      { kind: 'watch_movie', w: 0.5 },
       { kind: 'dress_up', w: 1.5 },
       { kind: 'do_laundry', w: 1.5 },
       { kind: 'read_book', w: 1 },
@@ -140,7 +144,7 @@ export const PERSONAS: Record<AgentId, Persona> = {
     id: 'grandma',
     name: '奶奶',
     role: '奶奶',
-    desc: '奶奶，72岁，退休纺织厂工人，喜欢在客厅摇椅上休息、看电视，在自己房间用收音机听戏曲，常去阳台浇花、坐在藤椅上晒太阳喝茶，爱听孙子弹钢琴；有高血压，饭后要吃药；说话慢悠悠，爱念叨家常。',
+    desc: '奶奶，72岁，退休纺织厂工人，喜欢在客厅摇椅上休息、看电视，在自己房间用收音机听戏曲，心疼阳台上的花草，看到叶子发黄就去浇水、坐在藤椅上晒太阳喝茶，爱听孙子弹钢琴；有高血压，饭后要吃药；说话慢悠悠，爱念叨家常。',
     color: '#9a7bb6',
     hair: '#eeeae4',
     homeRoom: 'living',
@@ -163,7 +167,7 @@ export const PERSONAS: Record<AgentId, Persona> = {
     id: 'kid',
     name: '乐乐',
     role: '孩子',
-    desc: '乐乐，8岁，小学二年级男孩，活泼好动，最喜欢在儿童房搭积木，正在学钢琴，爱偷偷从冰箱拿零食和酸奶，晚上喜欢泡澡玩水；好奇心强，爱问为什么。',
+    desc: '乐乐，8岁，小学二年级男孩，活泼好动，最喜欢在儿童房搭积木，正在学钢琴，爱偷偷从冰箱拿零食和酸奶，晚上喜欢泡澡玩水，最爱在影音室的大电视上看动画电影；好奇心强，爱问为什么。',
     color: '#eaa52c',
     hair: '#2a1b12',
     homeRoom: 'kids',
@@ -175,6 +179,7 @@ export const PERSONAS: Record<AgentId, Persona> = {
       { kind: 'get_snack', w: 2 },
       { kind: 'watch_tv', w: 2 },
       { kind: 'bath', w: 1 },
+      { kind: 'watch_movie', w: 1.5 },
       { kind: 'listen_piano', w: 1 },
       { kind: 'visit', w: 2 },
       { kind: 'wander', w: 0.8 },

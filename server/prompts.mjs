@@ -6,7 +6,7 @@ export function buildDialogueMessages(ctx) {
   const recent = (ctx.recent ?? []).map((r) => `${r.speaker}：${r.text}`).join('\n') || '（还没有人说话）';
   const system = [
     '你是一个温馨的2D家庭生活模拟的台词作者。家里有爸爸、妈妈、奶奶、8岁的孩子乐乐和家用机器人小暖。',
-    '房子有阳台（花架、藤椅）、书房、餐厅（长餐桌、咖啡机）、厨房（冰箱、灶台）、儿童房、大客厅（电视、沙发、钢琴、摇椅）、主卧、衣帽间、卫生间（浴缸、洗衣机）、奶奶房（收音机）和储物间。',
+    '房子有种满绿植的阳台（藤椅、几组盆栽，太久不浇水叶子会发黄）、爸爸的工作室（书房）、餐厅（长餐桌、一排咖啡机）、厨房（冰箱、灶台）、乐乐的房间、大客厅（电视、沙发、钢琴、摇椅）、主卧（穿衣镜）、奶奶房（收音机）、浴室（浴缸、洗衣机）、影音室（大电视、沙发）和储物间。',
     '根据人物设定、时间地点、双方正在做的事和最近的对白，只为“说话人”写下一句台词。',
     '要求：中文口语；一到两句话，不超过40个字；贴合说话人的身份和当下情境；如果是回应，要接住对方上一句。',
     '只输出台词本身：不要引号、不要写说话人名字、不要写动作或旁白。',
@@ -33,11 +33,11 @@ export function buildParseMessages(ctx) {
 可执行动作 action：
 - light_off：关某个房间的灯（常与条件 room_empty 搭配，如“没人就关掉”）
 - light_on：开某个房间的灯
-- tv_off：关客厅的电视
-- washer_start：启动卫生间的洗衣机
-- water_plants：给阳台的花浇水
+- tv_off：关电视（room 为 living 客厅或 theater 影音室，默认客厅）
+- washer_start：启动浴室的洗衣机
+- water_plants：给阳台的花浇水（阳台有几组盆栽，叶子发黄说明缺水）
 - remind：到时候当面提醒某个家人做某事（message 写要提醒的事，不带称呼，如“按时吃降压药”）
-房间 room：balcony=阳台，study=书房，dining=餐厅，kitchen=厨房，kids=儿童房(乐乐的房间)，living=客厅(大厅，有电视、沙发和钢琴)，master=主卧(爸爸妈妈的房间)，closet=衣帽间，bathroom=卫生间(有洗衣机和浴缸)，grandma=奶奶房，storage=储物间，corridor=玄关走廊。说话人说“我房间”时按说话人推断。
+房间 room：balcony=阳台，study=工作室(爸爸的书房)，dining=餐厅，kitchen=厨房，kids=乐乐的房间(儿童房)，living=客厅(大厅，有电视、沙发和钢琴)，master=主卧(爸爸妈妈的房间)，grandma=奶奶房，bathroom=浴室(卫生间，有洗衣机和浴缸)，theater=影音室(大电视和沙发)，storage=储物间，corridor=玄关走廊。说话人说“我房间”时按说话人推断。
 家人 target：dad=爸爸，mom=妈妈，grandma=奶奶，kid=乐乐；说话人说“提醒我”时 target 为说话人自己。
 触发时机 trigger：{"type":"now"} 立即；{"type":"event","event":"lunch_end"} 吃完午饭后/吃完饭；{"type":"time","time":"HH:MM"} 指定时刻（24小时制，“晚上八点”=20:00）。
 执行条件 condition："room_empty"（房间没人才执行）或 "none"。

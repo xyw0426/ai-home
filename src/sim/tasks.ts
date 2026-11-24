@@ -53,7 +53,7 @@ export function taskTitle(spec: TaskSpec): string {
     case 'light_on':
       return `开${room}的灯`;
     case 'tv_off':
-      return `关客厅电视${cond}`;
+      return `关${spec.room === 'theater' ? '影音室' : '客厅'}电视${cond}`;
     case 'washer_start':
       return '启动洗衣机';
     case 'water_plants':
@@ -73,10 +73,12 @@ export function confirmText(spec: TaskSpec, speaker: AgentId): string {
         : `好的，${when}去把${room}的灯关掉。`;
     case 'light_on':
       return `好的，${when}去把${room}的灯打开。`;
-    case 'tv_off':
-      return spec.condition === 'room_empty' ? `好的，${when}去客厅看看，没人看就关电视。` : `好的，${when}去关电视。`;
+    case 'tv_off': {
+      const r = spec.room === 'theater' ? '影音室' : '客厅';
+      return spec.condition === 'room_empty' ? `好的，${when}去${r}看看，没人看就关电视。` : `好的，${when}去把${r}的电视关掉。`;
+    }
     case 'washer_start':
-      return `好的，${when}去卫生间把洗衣机启动。`;
+      return `好的，${when}去浴室把洗衣机启动。`;
     case 'water_plants':
       return `好的，${when}去阳台给花浇水。`;
     case 'remind': {
@@ -106,7 +108,7 @@ export function validateSpec(raw: TaskSpec, speaker: AgentId, lunchDone: boolean
     trigger: raw.trigger ?? { type: 'now' },
     condition: raw.condition === 'room_empty' ? 'room_empty' : 'none',
   };
-  if (spec.action === 'tv_off') spec.room = 'living';
+  if (spec.action === 'tv_off') spec.room = spec.room === 'theater' ? 'theater' : 'living';
   if (spec.action === 'washer_start') spec.room = 'bathroom';
   if (spec.action === 'water_plants') spec.room = 'balcony';
   if (spec.action === 'light_off' || spec.action === 'light_on') {

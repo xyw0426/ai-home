@@ -13,6 +13,7 @@ import {
   type Task,
 } from './tasks';
 import { AGENT_IDS, DAY_SEC, ROOM_IDS, at, dist, hm, tod, type AgentId, type Pt, type RoomId } from './types';
+import { PLANT_YELLOW, leafState } from './plants';
 import type { Agent, World, WorldEvent } from './world';
 
 /** 一次检查房间时，需要在近期看见的格子比例 */
@@ -167,7 +168,56 @@ export class RobotBrain {
         }
       }
     }
+    // 盆栽：看见叶子发黄就记下来，并安排浇水
+    for (const f of w.planters) {
+      if (!f.cells.some((c) => this.visible.has(map.idx(c.x, c.y)))) continue;
+      const wv = w.fs[f.id].water ?? 1;
+      const st = leafState(wv);
+      const prev = this.stm.latest(`plant:${f.id}`);
+      if (!prev || !prev.detail.endsWith(st)) this.stm.record(t, `plant:${f.id}`, 'balcony', `${f.name}的叶子${st}`, undefined, true);
+      if (wv < PLANT_YELLOW) this.noticeDryPlants(f.name);
+    }
     if (w.tickCount % 180 === 0) this.refreshHabits();
+  }
+
+  private noticeDryPlants(name: string) {
+    const exists = this.todo.some((t) => t.spec.action === 'water_plants' && t.status !== 'done' && t.status !== 'cancelled');
+    if (exists) return;
+    const task = this.addTask(
+      { action: 'water_plants', room: 'balcony', trigger: { type: 'now' }, condition: 'none' },
+      'observation',
+      undefined,
+      '给阳台的花浇水（发现叶子发黄）',
+    );
+    logTask(task, this.w.t, `看见${name}的叶子发黄了`);
+  }
+
+  /** 浇花：依次走到每一组缺水的盆栽旁浇水，直到都浇透 */
+  private execWaterTask(task: Task) {
+    const w = this.w;
+    const a = this.a;
+    const req = task.requester ? `${w.agents[task.requester].name}的交代` : task.source === 'observation' ? '看见叶子发黄' : '预设';
+    this.because = `任务#${task.id}「${task.title}」· 来源：${req}`;
+    const dry = w.planters
+      .filter((f) => (w.fs[f.id].water ?? 1) < 0.9)
+      .sort((p, q) => dist(p.spots[0], a) - dist(q.spots[0], a));
+    if (!dry.length) {
+      a.path = [];
+      w.speak(a, '阳台的花都浇好啦，叶子绿油油的。');
+      this.finish(task, '阳台每一组盆栽都浇透了');
+      return;
+    }
+    const f = dry[0];
+    const spot = f.spots[0];
+    this.doing = `给${f.name}浇水（还剩 ${dry.length} 组）`;
+    if (this.arrived(spot)) {
+      a.path = [];
+      const before = w.fs[f.id].water ?? 1;
+      w.waterPlanter(f.id, a);
+      logTask(task, w.t, `给${f.name}浇了水（之前水分 ${Math.round(before * 100)}%，叶子${leafState(before)}）`);
+      return;
+    }
+    this.goTo(spot, f.name);
   }
 
   private refreshHabits() {
@@ -465,6 +515,9 @@ export class RobotBrain {
 
   private pickPatrolRoom(): { room: RoomId; why: string } {
     const w = this.w;
+    // 午饭时间：先去餐厅看看大家（顺便记住每个人在哪）
+    if (w.lunch.state === 'gathering' && w.lunch.startedAt !== undefined && this.roomChecked.dining < w.lunch.startedAt)
+      return { room: 'dining', why: '午饭时间到了，去餐厅看看家人们（长期记忆：每天12:00全家在餐厅吃午饭）' };
     const here = w.roomOfAgent(this.a);
     let rooms = ROOM_IDS.filter((r) => r !== here || this.roomChecked[r] < w.t - 1800);
     if (!rooms.length) rooms = ROOM_IDS.slice();
@@ -536,6 +589,7 @@ export class RobotBrain {
       w.emit('task', `小暖开始执行「${task.title}」`, 'robot', { taskId: task.id });
     }
     if (task.spec.action === 'remind') this.execRemind(task);
+    else if (task.spec.action === 'water_plants') this.execWaterTask(task);
     else this.execRoomTask(task);
   }
 
@@ -676,14 +730,11 @@ export class RobotBrain {
       return l ? { fid: l.id, spot: l.spots[0] } : null;
     }
     if (sp.action === 'tv_off') {
-      const spot = frontOf(w.map, w.map.byId.get('tv')!);
-      return spot ? { fid: 'tv', spot } : null;
+      const tvId = sp.room === 'theater' ? 'theater_tv' : 'tv';
+      const spot = frontOf(w.map, w.map.byId.get(tvId)!);
+      return spot ? { fid: tvId, spot } : null;
     }
     if (sp.action === 'washer_start') return { fid: 'washer', spot: w.map.byId.get('washer')!.spots[0] };
-    if (sp.action === 'water_plants') {
-      const spots = w.map.byId.get('plants')!.spots.slice().sort((p, q) => dist(p, this.a) - dist(q, this.a));
-      return { fid: 'plants', spot: spots[0] };
-    }
     return null;
   }
 
@@ -696,11 +747,11 @@ export class RobotBrain {
       case 'light_on':
         return w.lampOn(sp.room!);
       case 'tv_off':
-        return !w.fs.tv.on;
+        return !w.fs[sp.room === 'theater' ? 'theater_tv' : 'tv'].on;
       case 'washer_start':
         return w.fs.washer.mode === 'running';
       case 'water_plants':
-        return (w.fs.plants.runUntil ?? 0) > w.t;
+        return w.planters.every((f) => (w.fs[f.id].water ?? 1) >= 0.9);
       default:
         return false;
     }
@@ -758,7 +809,6 @@ export class RobotBrain {
       if (sp.action === 'light_off') text = sp.condition === 'room_empty' ? `确认${rn}灯亮着且屋内无人，已关灯` : `已关掉${rn}的灯`;
       else if (sp.action === 'light_on') text = `已打开${rn}的灯`;
       else if (sp.action === 'tv_off') text = '已关掉电视';
-      else if (sp.action === 'water_plants') text = '阳台的花浇好了';
       else text = '洗衣机已启动';
       if (sp.action === 'light_off' && task.requester)
         this.ltm.upsert(

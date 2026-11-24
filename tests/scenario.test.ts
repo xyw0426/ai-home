@@ -2,6 +2,8 @@ import { describe, expect, test } from 'vitest';
 import { demoWorld, minutes, runTicks, runUntil } from './helpers';
 import { at, dist, hm, tod, type AgentId } from '../src/sim/types';
 import { COOK_WINDOWS, type World } from '../src/sim/world';
+import { PLANT_DRY_SEC, leafState } from '../src/sim/plants';
+import { leafColor } from '../src/ui/render';
 
 const INSTRUCTION = '吃完饭帮我看看书房的灯，没人就关掉';
 
@@ -64,7 +66,13 @@ describe('地图与视线', () => {
   test('参照户型图的房间都在，墙自动围起来', () => {
     const w = demoWorld();
     const names = w.map.rooms.map((r) => r.name);
-    for (const n of ['阳台', '书房', '餐厅', '厨房', '儿童房', '客厅', '主卧', '衣帽间', '卫生间', '奶奶房', '储物间', '玄关走廊']) expect(names).toContain(n);
+    // 参照户型图：右列从上到下是主卧、奶奶房、浴室、影音室，影音室左边是储物间
+    for (const n of ['阳台', '工作室', '餐厅', '厨房', '乐乐的房间', '客厅', '主卧', '奶奶房', '浴室', '影音室', '储物间', '玄关走廊']) expect(names).toContain(n);
+    const y0 = (id: string) => w.map.room(id as never).y0;
+    expect(y0('master') < y0('grandma') && y0('grandma') < y0('bathroom') && y0('bathroom') < y0('theater')).toBe(true);
+    expect(w.map.room('storage').x1 < w.map.room('theater').x0).toBe(true);
+    expect(w.map.room('study').x0).toBe(1);
+    expect(w.map.room('study').y0).toBeLessThan(w.map.room('dining').y0);
     // 每个房间都能从充电座走到，并且有灯
     const dock = w.map.byId.get('dock')!.spots[0];
     for (const r of w.map.rooms) {
@@ -118,7 +126,7 @@ describe('验收场景（演示模式）', () => {
     expect(task.spec).toMatchObject({ trigger: { type: 'event', event: 'lunch_end' }, condition: 'room_empty' });
     expect(task.status).toBe('pending');
     const confirm = w.lines.filter((l) => l.speaker === 'robot').pop()!;
-    expect(confirm.text).toMatch(/书房/);
+    expect(confirm.text).toMatch(/工作室|书房/);
 
     // 释放控制：爸爸恢复自主活动
     w.release();
@@ -160,7 +168,7 @@ describe('验收场景（演示模式）', () => {
     expect(ok).toBe(true);
     const t = lightTask(w)!;
     expect(w.fs.lamp_study.on).toBe(true);
-    expect(t.log.some((l) => /书房里有爸爸/.test(l.text))).toBe(true);
+    expect(t.log.some((l) => /(工作室|书房)里有爸爸/.test(l.text))).toBe(true);
     expect(w.robot.todo.includes(t)).toBe(true);
     // 爸爸离开后，再次检查时完成
     w.release();
@@ -320,7 +328,7 @@ describe('新家具', () => {
   test('家人一天里会用到钢琴、冰箱、咖啡机、花架等新家具，并且有可观察的状态变化', async () => {
     const w = demoWorld();
     const used = new Map<string, string>();
-    const seen = { piano: false, fridge: false, coffee: false, plants: false, radio: false };
+    const seen = { piano: false, fridge: false, coffee: false, plants: false, radio: false, theater: false };
     w.onEvent((e) => {
       if (e.type === 'activity_start' && e.data?.fid && e.actor) used.set(String(e.data.fid), `${hm(e.t)} ${e.text}`);
     });
@@ -328,11 +336,12 @@ describe('新家具', () => {
       if (w.fs.piano.on) seen.piano = true;
       if (w.fs.fridge.on) seen.fridge = true;
       if (w.fs.coffee.on) seen.coffee = true;
-      if ((w.fs.plants.runUntil ?? 0) > w.t) seen.plants = true;
+      if (w.planters.some((f) => w.fs[f.id].wateredAt !== undefined)) seen.plants = true;
+      if (w.fs.theater_tv.on) seen.theater = true;
       if (w.fs.radio.on) seen.radio = true;
       return tod(w.t) >= at(21, 0);
     }, 30000);
-    const newOnes = ['piano', 'fridge', 'coffee', 'plants', 'rattan', 'mirror', 'basin', 'bathtub', 'radio', 'stools'].filter((f) => used.has(f));
+    const newOnes = ['piano', 'fridge', 'coffee', 'planter_l', 'planter_r', 'planter_bl', 'planter_br', 'rattan', 'mirror', 'basin', 'bathtub', 'radio', 'stools', 'theater_sofa'].filter((f) => used.has(f));
     console.log('用到的新家具：', newOnes.map((f) => used.get(f)).join(' | '));
     expect(newOnes.length).toBeGreaterThanOrEqual(5);
     expect(Object.values(seen).filter(Boolean).length).toBeGreaterThanOrEqual(3);
@@ -352,17 +361,70 @@ describe('新家具', () => {
     expect(w.furnitureStatus(w.map.byId.get('fridge')!)).toMatch(/门开着/);
   });
 
-  test('机器人能听懂“帮我给阳台的花浇水”并去阳台浇花', async () => {
+  test('机器人能听懂“帮我给阳台的花浇水”，把每一组缺水的盆栽都浇透', async () => {
     const w = demoWorld();
-    w.fs.plants.runUntil = 0;
     w.robot.hear('grandma', '小暖，帮我给阳台的花浇浇水');
     await runTicks(w, 2);
     const task = w.robot.todo.find((t) => t.spec.action === 'water_plants');
     expect(task?.spec.room).toBe('balcony');
     const ok = await runUntil(w, () => task!.status === 'done', minutes(90));
     expect(ok).toBe(true);
-    expect(w.fs.plants.runUntil!).toBeGreaterThan(w.t);
-    const r = w.agents.robot;
-    expect(w.map.roomAt(r.x, r.y)).toBe('balcony');
+    for (const f of w.planters) expect(w.fs[f.id].water!, f.id).toBeGreaterThan(0.85);
+    expect(task!.log.filter((l) => /浇了水/.test(l.text)).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('阳台绿植', () => {
+  test('长时间不浇水叶子变黄，浇水后变绿', async () => {
+    const w = demoWorld();
+    const f = w.map.byId.get('planter_r')!;
+    w.fs.planter_r.water = 0.7;
+    expect(leafState(w.fs.planter_r.water!)).toBe('翠绿');
+    // 不浇水：大约 14 小时从浇透到干透
+    for (let i = 0; i < minutes(7 * 60); i++) w.fs.planter_r.water = Math.max(0, w.fs.planter_r.water! - 10 / PLANT_DRY_SEC);
+    expect(leafState(w.fs.planter_r.water!)).toBe('发黄');
+    expect(w.furnitureStatus(f)).toMatch(/叶子发黄/);
+    const yellow = leafColor(w.fs.planter_r.water!);
+    // 接管妈妈给这组盆栽浇水
+    w.takeControl('mom');
+    expect(w.furnitureActions(f, w.agents.mom).map((a) => a.id)).toContain('water_plants');
+    w.commandInteract('planter_r', 'water_plants');
+    const ok = await runUntil(w, () => w.fs.planter_r.water! > 0.95, minutes(60));
+    expect(ok).toBe(true);
+    expect(leafState(w.fs.planter_r.water!)).toBe('翠绿');
+    expect(leafColor(w.fs.planter_r.water!)).not.toBe(yellow);
+    expect(w.events.some((e) => /发黄的叶子慢慢变回了绿色/.test(e.text))).toBe(true);
+  });
+
+  test('水分随时间下降；机器人看见叶子发黄会自己安排浇水', async () => {
+    const w = demoWorld();
+    // 每一步（10 秒）水分按 14 小时干透的速度下降
+    const before = w.fs.planter_br.water!;
+    await runTicks(w, 1);
+    expect(before - w.fs.planter_br.water!).toBeCloseTo(10 / PLANT_DRY_SEC, 8);
+    // 开局有两组发黄：机器人巡视到阳台时会发现并去浇
+    const ok = await runUntil(w, () => w.robot.history.some((t) => t.spec.action === 'water_plants' && t.source === 'observation') || [...w.robot.todo].some((t) => t.spec.action === 'water_plants' && t.source === 'observation'), minutes(240));
+    expect(ok).toBe(true);
+    await runUntil(w, () => w.planters.every((f) => w.fs[f.id].water! >= 0.35), minutes(120));
+    for (const f of w.planters) expect(leafState(w.fs[f.id].water!), f.id).not.toBe('发黄');
+  });
+});
+
+describe('影音室', () => {
+  test('在影音室看电影会打开大电视；机器人能按要求关掉影音室的电视', async () => {
+    const w = demoWorld();
+    w.takeControl('kid');
+    w.commandInteract('theater_sofa', 'watch_movie');
+    const ok = await runUntil(w, () => w.fs.theater_tv.on, minutes(30));
+    expect(ok).toBe(true);
+    expect(w.map.roomAt(w.agents.kid.x, w.agents.kid.y)).toBe('theater');
+    expect(w.fs.tv.on).toBe(false);
+    // 乐乐离开后，让机器人关影音室电视
+    w.commandMove(13, 30);
+    await runUntil(w, () => !w.fs.theater_tv.users.length, 20);
+    w.fs.theater_tv.on = true;
+    w.robot.addTask({ action: 'tv_off', room: 'theater', trigger: { type: 'now' }, condition: 'room_empty' }, 'dialogue', 'mom');
+    const off = await runUntil(w, () => !w.fs.theater_tv.on, minutes(90));
+    expect(off).toBe(true);
   });
 });

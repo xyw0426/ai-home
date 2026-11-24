@@ -1,17 +1,20 @@
 :root {
-  --bg: #f5ede1;
-  --panel: #fffaf2;
-  --panel-2: #fbf3e7;
-  --line: #eadcc8;
-  --text: #3d2f25;
-  --muted: #8b7766;
-  --accent: #df7a4e;
-  --accent-2: #c9643a;
+  --bg: #fffaf3;
+  --panel: #fffdf9;
+  --panel-2: #fdf2e4;
+  --line: #f0d4b4;
+  --wall: #f7d3ae;
+  --wall-edge: #e6b385;
+  --text: #5a3e2b;
+  --muted: #a3866c;
+  --accent: #e8915b;
+  --accent-2: #d27a43;
   --teal: #4ea9b0;
-  --green: #4f9d69;
+  --green: #5f9e5c;
   --amber: #d49526;
   --red: #c8553d;
-  --shadow: 0 1px 2px rgba(90, 60, 30, 0.06), 0 6px 18px rgba(90, 60, 30, 0.07);
+  --shadow: 0 3px 0 #efcfae;
+  --title-font: 'ZCOOL KuaiLe', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -181,3 +184,67 @@ code { background: #f2e6d3; padding: 1px 5px; border-radius: 5px; font-size: 12p
   .topbar { padding: 10px 16px; gap: 10px; }
   .speed button { padding: 6px 7px; }
 }
+
+
+/* ---------- 参照户型图的温暖砖块风格 ---------- */
+body {
+  background-color: var(--bg);
+  background-image: linear-gradient(#f6e6d4 1px, transparent 1px), linear-gradient(90deg, #f6e6d4 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+.topbar {
+  background-color: var(--wall);
+  background-image: linear-gradient(#e9b98c 1px, transparent 1px), linear-gradient(90deg, #e9b98c 1px, transparent 1px);
+  background-size: 26px 26px;
+  border-bottom: 4px solid var(--wall-edge);
+  box-shadow: 0 2px 0 #f9e1c6;
+}
+.title { font-family: var(--title-font); font-weight: 400; font-size: 26px; color: #6b4228; text-shadow: 0 2px 0 #fff3e4; letter-spacing: 1px; }
+.subtitle { color: #8a5f3f; }
+.clock, .speed, .mode-badge, .top-actions .btn {
+  box-shadow: 0 2px 0 var(--wall-edge);
+}
+.clock { background: var(--panel); border: 2px solid var(--wall-edge); border-radius: 10px; }
+.clock-time b { font-family: var(--title-font); font-weight: 400; font-size: 24px; color: #6b4228; }
+.phase { background: #fde3c8; color: #8a5530; }
+.speed { background: var(--panel); border: 2px solid var(--wall-edge); border-radius: 10px; }
+.speed button { border-right: 1px solid var(--line); color: #6b4228; }
+.speed button.on { background: var(--accent); color: #fff; }
+.btn { background: #fff8ef; border: 2px solid var(--line); border-radius: 999px; color: #6b4228; box-shadow: 0 2px 0 #f0d4b4; }
+.btn:hover:not(:disabled) { background: #fde8d2; }
+.btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 #f0d4b4; }
+.btn.primary { background: var(--accent); border-color: var(--accent-2); color: #fff; box-shadow: 0 2px 0 #b8652f; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-2); }
+.mode-badge.live { background: #eef7e8; border-color: #b6d7a8; }
+.mode-badge.demo { background: #fff2dc; border-color: #f0cf95; }
+.card, .dock, .modal {
+  background: var(--panel);
+  border: 3px solid var(--wall);
+  outline: 1px solid var(--wall-edge);
+  outline-offset: -1px;
+  border-radius: 10px;
+  box-shadow: 0 4px 0 #efcfae;
+}
+.card h3 { font-family: var(--title-font); font-weight: 400; font-size: 18px; color: #6b4228; }
+.dock.active { background: #f6fbf1; border-color: #cfe5c2; }
+.map-wrap {
+  border: 4px solid var(--wall);
+  outline: 1px solid var(--wall-edge);
+  outline-offset: -1px;
+  border-radius: 12px;
+  box-shadow: 0 4px 0 #efcfae;
+  background: #fffdf9;
+}
+.map-tools { border: 2px solid var(--wall); border-radius: 999px; box-shadow: 0 2px 0 #efcfae; padding: 3px 6px; }
+.map-tools button { border-radius: 999px; }
+.members li.sel { border-color: #f3c49c; background: #fff1e2; }
+.members li.ctl { border-color: #bfe0b0; background: #f1f9ec; }
+.avatar { box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12); border: 2px solid #fff; }
+.tasks > li { border: 2px solid #f6e0c8; border-radius: 10px; }
+.tabs button.on { color: #b5602f; border-color: var(--accent); }
+.st-done { background: #e4f3dc; color: var(--green); }
+.ev { border-bottom: 1px dashed #f3dcc3; }
+.chip { border: 2px dashed #efc9a2; background: #fffaf2; }
+.say { border: 2px solid var(--line); border-radius: 999px; padding: 8px 16px; }
+.fmenu { border: 3px solid var(--wall); outline: 1px solid var(--wall-edge); outline-offset: -1px; border-radius: 10px; box-shadow: 0 4px 0 #efcfae; }
+.fmenu-title { font-family: var(--title-font); font-weight: 400; font-size: 16px; color: #6b4228; }

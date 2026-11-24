@@ -15,23 +15,41 @@ export interface RenderOpts {
   now: number; // 毫秒，用于动画
 }
 
-type FloorKind = 'planks' | 'checker' | 'dots' | 'runner';
+type FloorKind = 'planks' | 'grid' | 'dots';
+// 参照户型图：大部分房间是奶油色方砖，工作室是深色木地板，乐乐房间粉白方砖，浴室蓝色瓷砖，厨房白瓷砖
 const FLOOR: Record<FloorStyle, { base: string; alt: string; kind: FloorKind }> = {
-  parquet: { base: '#b9804f', alt: '#a8723f', kind: 'planks' },
-  carpet: { base: '#f4dce2', alt: '#ecc8d2', kind: 'dots' },
-  wood: { base: '#ecdcc0', alt: '#e0cdab', kind: 'planks' },
-  warm: { base: '#ead6b2', alt: '#ddc6a0', kind: 'planks' },
-  runner: { base: '#efe1cb', alt: '#e3d1b4', kind: 'checker' },
-  tile: { base: '#f7f3ec', alt: '#e8e0d2', kind: 'checker' },
-  oak: { base: '#f3e3c9', alt: '#e8d4b4', kind: 'checker' },
-  honey: { base: '#f5e6cd', alt: '#ead6b6', kind: 'checker' },
-  deck: { base: '#f0dfc4', alt: '#e2cba8', kind: 'planks' },
-  aqua: { base: '#c9dcea', alt: '#b5cde0', kind: 'checker' },
-  plain: { base: '#e9dfcf', alt: '#ddd0bb', kind: 'checker' },
-  rose: { base: '#f6e4df', alt: '#ecd4cd', kind: 'planks' },
+  parquet: { base: '#a86a3e', alt: '#93582f', kind: 'planks' },
+  carpet: { base: '#fbf0ee', alt: '#f0dcd9', kind: 'grid' },
+  wood: { base: '#fbeedd', alt: '#f0dbc0', kind: 'grid' },
+  warm: { base: '#fbeedd', alt: '#f0dbc0', kind: 'grid' },
+  runner: { base: '#f9ead6', alt: '#efd6b7', kind: 'grid' },
+  tile: { base: '#fcfaf6', alt: '#ebe3d6', kind: 'grid' },
+  oak: { base: '#fbeedd', alt: '#f0dbc0', kind: 'grid' },
+  honey: { base: '#fbeedd', alt: '#f0dbc0', kind: 'grid' },
+  deck: { base: '#fbeedd', alt: '#f0dbc0', kind: 'grid' },
+  aqua: { base: '#bfd4ea', alt: '#e8f0f8', kind: 'grid' },
+  plain: { base: '#f8ebd9', alt: '#ecd6b9', kind: 'grid' },
+  rose: { base: '#fbeedd', alt: '#f0dbc0', kind: 'grid' },
 };
 
-const BLANKET: Record<string, string> = { bed_kid: '#e48f8f', bed_master: '#86a879', bed_grandma: '#b49ad0' };
+const BLANKET: Record<string, string> = { bed_kid: '#e8a0a0', bed_master: '#8fb07f', bed_grandma: '#c3a9dc' };
+
+/** 水分 → 叶子颜色：浇透是绿色，缺水慢慢变黄，干透带一点褐色 */
+export function leafColor(water: number, shade = 0): string {
+  const g = [106 - shade * 12, 168 - shade * 14, 79 - shade * 8];
+  const y = [222, 188, 74];
+  const b = [190, 140, 70];
+  let c: number[];
+  if (water >= 0.6) c = g;
+  else if (water >= 0.35) {
+    const k = (0.6 - water) / 0.25;
+    c = g.map((v, i) => v + (y[i] - v) * k * 0.6);
+  } else {
+    const k = Math.min(1, (0.35 - water) / 0.35);
+    c = y.map((v, i) => v + (b[i] - v) * k * 0.5);
+  }
+  return `rgb(${c.map((v) => Math.round(v)).join(',')})`;
+}
 
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const rad = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -74,29 +92,21 @@ export function ambientDark(t: number): number {
 }
 
 const RUGS: [number, number, number, number, string, string][] = [
-  [3, 11, 6, 14, '#9b4f3c', '#c98a6c'], // 书房
-  [14, 9, 17, 12, '#b9a27f', '#e2d2b4'], // 客厅茶几
-  [13, 19, 18, 24, '#d8b98b', '#f1dfc0'], // 钢琴
-  [4, 39, 8, 42, '#f2b8c6', '#fbe0e6'], // 儿童房
-  [28, 11, 33, 14, '#c9b48e', '#e8dbc0'], // 主卧
-  [27, 35, 31, 38, '#b7a4cf', '#ddd2ea'], // 奶奶房
-  [26, 26, 30, 27, '#9fc3b0', '#cfe3d7'], // 卫生间地垫
+  [3, 11, 6, 14, '#a5543c', '#e0a27c'], // 工作室
+  [14, 9, 17, 12, '#efe2c8', '#d8bf98'], // 客厅茶几
+  [13, 19, 18, 24, '#e9d3aa', '#c9a271'], // 钢琴
+  [4, 39, 8, 42, '#f6c9d3', '#fbe6eb'], // 乐乐的房间
+  [28, 11, 33, 14, '#efe2c8', '#d8bf98'], // 主卧
+  [28, 33, 32, 37, '#efe0c5', '#cfae84'], // 影音室
+  [26, 26, 30, 27, '#cfe3d7', '#9fc3b0'], // 浴室地垫
 ];
 
 export function drawWorld(ctx: CanvasRenderingContext2D, w: World, o: RenderOpts) {
   const m = w.map;
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-  // 屋外空地
-  ctx.fillStyle = '#f3ece1';
+  // 屋外：白色
+  ctx.fillStyle = '#fffdf9';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  ctx.fillStyle = '#e8ddcc';
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++)
-      if (m.kind[m.idx(x, y)] === CELL_VOID && (x + y) % 3 === 0) {
-        ctx.beginPath();
-        ctx.arc(x * T + T / 2, y * T + T / 2, 1.3, 0, Math.PI * 2);
-        ctx.fill();
-      }
   // 地板
   for (const r of ROOMS) {
     const st = FLOOR[r.floor];
@@ -106,19 +116,20 @@ export function drawWorld(ctx: CanvasRenderingContext2D, w: World, o: RenderOpts
           const px = x * T;
           const py = y * T;
           ctx.fillStyle = st.base;
-          if (st.kind === 'checker' && (x + y) % 2) ctx.fillStyle = st.alt;
           ctx.fillRect(px, py, T, T);
           ctx.fillStyle = st.alt;
           if (st.kind === 'planks') {
             ctx.fillRect(px, py + T / 2 - 0.5, T, 1);
             ctx.fillRect(px + ((y % 2) * T) / 2, py, 1, T / 2);
             ctx.fillRect(px + (((y + 1) % 2) * T) / 2, py + T / 2, 1, T / 2);
-          } else if (st.kind === 'dots') {
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            ctx.fillRect(px, py, T, 2);
+          } else if (st.kind === 'grid') {
+            // 方砖：每格一条细缝
+            ctx.fillRect(px, py + T - 1, T, 1);
+            ctx.fillRect(px + T - 1, py, 1, T);
+          } else {
             dot(ctx, px + T / 2, py + T / 2, 2, st.alt);
-          } else if (st.kind === 'checker') {
-            ctx.fillStyle = 'rgba(255,255,255,0.18)';
-            ctx.fillRect(px, py, T, 1);
-            ctx.fillRect(px, py, 1, T);
           }
         }
   }
@@ -131,6 +142,21 @@ export function drawWorld(ctx: CanvasRenderingContext2D, w: World, o: RenderOpts
     ctx.lineWidth = 2;
     rr(ctx, x0 * T + 8, y0 * T + 8, (x1 - x0 + 1) * T - 16, (y1 - y0 + 1) * T - 16, 5);
     ctx.stroke();
+    // 地毯中间的菱形花纹
+    const cx = ((x0 + x1 + 1) / 2) * T;
+    const cy = ((y0 + y1 + 1) / 2) * T;
+    const rx = ((x1 - x0 + 1) * T) / 2 - 18;
+    const ry = ((y1 - y0 + 1) * T) / 2 - 16;
+    if (rx > 10 && ry > 10) {
+      ctx.beginPath();
+      ctx.moveTo(cx - rx, cy);
+      ctx.lineTo(cx, cy - ry);
+      ctx.lineTo(cx + rx, cy);
+      ctx.lineTo(cx, cy + ry);
+      ctx.closePath();
+      ctx.stroke();
+      dot(ctx, cx, cy, 3, c2);
+    }
   }
   // 墙与门
   for (let y = 0; y < H; y++)
@@ -139,21 +165,24 @@ export function drawWorld(ctx: CanvasRenderingContext2D, w: World, o: RenderOpts
       const px = x * T;
       const py = y * T;
       if (k === CELL_WALL) {
-        ctx.fillStyle = '#e3b98c';
+        // 浅橙色砖块墙
+        ctx.fillStyle = '#f7d3ae';
         ctx.fillRect(px, py, T, T);
-        ctx.strokeStyle = '#cf9a6a';
+        ctx.fillStyle = '#fbe4cb';
+        ctx.fillRect(px + 2, py + 2, T - 4, 3);
+        ctx.strokeStyle = '#e6b385';
         ctx.lineWidth = 1;
         ctx.strokeRect(px + 0.5, py + 0.5, T - 1, T - 1);
         const below = m.kind[m.idx(x, Math.min(H - 1, y + 1))];
         if (y + 1 < H && (below === CELL_FLOOR || below === CELL_DOOR)) {
-          ctx.fillStyle = '#c48c5c';
-          ctx.fillRect(px, py + T - 4, T, 4);
+          ctx.fillStyle = '#ebbd92';
+          ctx.fillRect(px, py + T - 3, T, 3);
         }
       } else if (k === CELL_DOOR) {
         const glass = y === 5; // 阳台推拉门
-        ctx.fillStyle = glass ? '#cfe4ea' : '#fbf3e6';
+        ctx.fillStyle = glass ? '#d9e8ee' : '#ffffff';
         ctx.fillRect(px, py, T, T);
-        ctx.fillStyle = glass ? '#7f98a1' : '#c48c5c';
+        ctx.fillStyle = glass ? '#6d6f73' : '#f0d2b2';
         const vertical = m.isWall(x - 1, y) || m.isWall(x + 1, y) ? false : true;
         if (!vertical) {
           ctx.fillRect(px, py + 2, 3, T - 4);
@@ -614,12 +643,16 @@ function drawFurniture(ctx: CanvasRenderingContext2D, w: World, f: FurnitureDef,
       break;
     }
     case 'tv': {
-      // 竖着靠墙的电视柜，屏幕朝右
-      ctx.fillStyle = '#c69a6b';
-      rr(ctx, b.x + 1, b.y + 1, vertical ? 12 : b.w - 2, vertical ? b.h - 2 : 12, 3);
+      // 竖着靠墙的电视：客厅的贴左墙朝右，影音室的大电视贴右墙朝左
+      const faceLeft = b.x > CANVAS_W / 2;
+      const big = f.id === 'theater_tv';
+      ctx.fillStyle = big ? '#8a2f2f' : '#c69a6b';
+      if (vertical) rr(ctx, faceLeft ? b.x + b.w - 13 : b.x + 1, b.y + 1, 12, b.h - 2, 3);
+      else rr(ctx, b.x + 1, b.y + 1, b.w - 2, 12, 3);
       ctx.fill();
       ctx.fillStyle = '#1f1f24';
-      if (vertical) rr(ctx, b.x + 12, b.y + 8, 9, b.h - 16, 2);
+      const sx = faceLeft ? b.x + b.w - 22 : b.x + 12;
+      if (vertical) rr(ctx, sx, b.y + (big ? 2 : 8), 10, b.h - (big ? 4 : 16), 2);
       else rr(ctx, b.x + 6, b.y + 12, b.w - 12, 9, 2);
       ctx.fill();
       if (fs.on) {
@@ -628,27 +661,29 @@ function drawFurniture(ctx: CanvasRenderingContext2D, w: World, f: FurnitureDef,
         g.addColorStop(0, `hsl(${hshift},70%,62%)`);
         g.addColorStop(1, `hsl(${(hshift + 120) % 360},70%,62%)`);
         ctx.fillStyle = g;
-        if (vertical) ctx.fillRect(b.x + 14, b.y + 10, 5, b.h - 20);
+        if (vertical) ctx.fillRect(sx + 2, b.y + (big ? 4 : 10), 6, b.h - (big ? 8 : 20));
         else ctx.fillRect(b.x + 8, b.y + 14, b.w - 16, 5);
-        const glow = ctx.createRadialGradient(b.x + b.w, b.y + b.h / 2, 4, b.x + b.w, b.y + b.h / 2, 80);
-        glow.addColorStop(0, 'rgba(160,200,255,0.35)');
+        const gx = faceLeft ? b.x : b.x + b.w;
+        const glow = ctx.createRadialGradient(gx, b.y + b.h / 2, 4, gx, b.y + b.h / 2, big ? 110 : 80);
+        glow.addColorStop(0, 'rgba(160,200,255,0.38)');
         glow.addColorStop(1, 'rgba(160,200,255,0)');
         ctx.fillStyle = glow;
-        ctx.fillRect(b.x, b.y - 40, 90, b.h + 80);
+        ctx.fillRect(faceLeft ? gx - 120 : gx - 10, b.y - 50, 130, b.h + 100);
       }
       break;
     }
     case 'sofa': {
-      ctx.fillStyle = '#7f9e78';
+      ctx.fillStyle = f.id === 'theater_sofa' ? '#e6cfa8' : '#7f9e78';
       rr(ctx, b.x + 1, b.y + 1, b.w - 2, b.h - 2, 7);
       ctx.fill();
-      ctx.fillStyle = '#9cbb93';
+      ctx.fillStyle = f.id === 'theater_sofa' ? '#f4e4c6' : '#9cbb93';
       for (const c of f.cells) {
         rr(ctx, c.x * T + (vertical ? 3 : 4), c.y * T + (vertical ? 4 : 8), T - (vertical ? 11 : 6), T - (vertical ? 6 : 11), 5);
         ctx.fill();
       }
-      ctx.fillStyle = '#6a8a64';
-      if (vertical) rr(ctx, b.x + b.w - 8, b.y + 1, 7, b.h - 2, 4);
+      ctx.fillStyle = f.id === 'theater_sofa' ? '#c9a77c' : '#6a8a64';
+      const backLeft = f.id === 'theater_sofa'; // 影音室沙发面朝右边的大电视
+      if (vertical) rr(ctx, backLeft ? b.x + 1 : b.x + b.w - 8, b.y + 1, 7, b.h - 2, 4);
       else rr(ctx, b.x + 1, b.y + 1, b.w - 2, 7, 4);
       ctx.fill();
       break;
@@ -737,44 +772,84 @@ function drawFurniture(ctx: CanvasRenderingContext2D, w: World, f: FurnitureDef,
       break;
     }
     case 'coffee': {
-      ctx.fillStyle = '#3d3430';
-      rr(ctx, b.x + 5, b.y + 3, b.w - 10, b.h - 6, 3);
+      // 一排咖啡机：彩色的豆仓 + 深色机身
+      const domes = ['#7fae6a', '#d9685a', '#e8b44f', '#8a6043', '#7fae6a', '#d9685a'];
+      ctx.fillStyle = '#8a5a3a';
+      rr(ctx, b.x + 1, b.y + 12, b.w - 2, b.h - 14, 3);
       ctx.fill();
-      ctx.fillStyle = '#b9b2a6';
-      ctx.fillRect(b.x + 8, b.y + 6, b.w - 16, 4);
-      dot(ctx, b.x + b.w / 2, b.y + b.h - 8, 3.5, fs.on ? '#ffffff' : '#7a6f66');
+      f.cells.forEach((c, k) => {
+        const cx = c.x * T + T / 2;
+        ctx.fillStyle = '#3d3430';
+        rr(ctx, cx - 7, c.y * T + 8, 14, 12, 2);
+        ctx.fill();
+        ctx.fillStyle = domes[k % domes.length];
+        rr(ctx, cx - 6, c.y * T + 1, 12, 9, 4);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.fillRect(cx - 4, c.y * T + 3, 2, 5);
+      });
       if (fs.on) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ctx.lineWidth = 1.3;
-        const ph = ((now / 450) % 1) * 7;
-        ctx.beginPath();
-        ctx.moveTo(b.x + b.w / 2, b.y - ph);
-        ctx.quadraticCurveTo(b.x + b.w / 2 + 3, b.y - 4 - ph, b.x + b.w / 2, b.y - 8 - ph);
-        ctx.stroke();
+        for (const sp of f.spots) {
+          const cx = sp.x * T + T / 2;
+          dot(ctx, cx, b.y + b.h - 6, 3.5, '#ffffff');
+          ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+          ctx.lineWidth = 1.3;
+          const ph = ((now / 450) % 1) * 7;
+          ctx.beginPath();
+          ctx.moveTo(cx, b.y + b.h - 10 - ph);
+          ctx.quadraticCurveTo(cx + 3, b.y + b.h - 14 - ph, cx, b.y + b.h - 18 - ph);
+          ctx.stroke();
+        }
       }
       break;
     }
     case 'plants': {
-      const wet = (fs.runUntil ?? 0) > w.t;
-      for (const c of f.cells) {
+      const wv = fs.water ?? 1;
+      const justWatered = fs.wateredAt !== undefined && w.t - fs.wateredAt < 15 * 60;
+      f.cells.forEach((c, k) => {
         const cx = c.x * T + T / 2;
         const cy = c.y * T + T / 2;
-        dot(ctx, cx, cy + 4, 7, wet ? '#8a5a3a' : '#c48a5c');
-        const leaf = (c.x + c.y) % 2 ? '#5f9e5c' : '#7cb36a';
-        for (const [dx, dy] of [
-          [-5, -3],
-          [5, -3],
-          [0, -8],
-          [0, 0],
-        ])
-          dot(ctx, cx + dx, cy + dy, 5, leaf);
-        if ((c.x + c.y) % 2 === 0) dot(ctx, cx + 3, cy - 6, 2.5, '#f28aa0');
-        if (wet) {
-          const ph = (now / 700 + c.x) % 1;
-          dot(ctx, cx - 4, cy - 2 + ph * 6, 1.6, `rgba(120,190,235,${1 - ph})`);
-          dot(ctx, cx + 5, cy - 5 + ph * 6, 1.4, `rgba(120,190,235,${1 - ph})`);
+        // 花盆
+        ctx.fillStyle = k % 2 ? '#d98b5f' : '#f2efe8';
+        rr(ctx, cx - 7, cy + 1, 14, 10, 3);
+        ctx.fill();
+        ctx.fillStyle = wv > 0.5 ? '#7a5236' : '#b48a62';
+        ctx.fillRect(cx - 6, cy + 1, 12, 2);
+        // 叶子：颜色由水分决定
+        const big = k === f.cells.length - 1 && f.id === 'planter_br';
+        const r = big ? 7 : 5.2;
+        const droop = wv < 0.35 ? 2.5 : 0;
+        const leaves: [number, number][] = big
+          ? [
+              [-7, -4],
+              [7, -4],
+              [0, -10],
+              [-4, 1],
+              [4, 1],
+            ]
+          : [
+              [-5, -3 + droop],
+              [5, -3 + droop],
+              [0, -8 + droop],
+            ];
+        leaves.forEach(([dx, dy], li) => dot(ctx, cx + dx, cy + dy, r, leafColor(wv, li % 2)));
+        if (wv >= 0.6 && (c.x + c.y) % 3 === 0) dot(ctx, cx + 2, cy - 6, 2.4, '#f28aa0');
+        if (justWatered) {
+          const ph = (now / 700 + c.x * 0.3) % 1;
+          dot(ctx, cx - 4, cy - 4 + ph * 7, 1.6, `rgba(110,180,235,${1 - ph})`);
+          dot(ctx, cx + 5, cy - 6 + ph * 7, 1.4, `rgba(110,180,235,${1 - ph})`);
         }
-      }
+      });
+      // 水分条
+      const s0 = f.spots[0];
+      const gx = s0.x * T + 3;
+      const gy = s0.y * T + T - 6;
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      rr(ctx, gx, gy, T - 6, 4, 2);
+      ctx.fill();
+      ctx.fillStyle = wv < 0.35 ? '#e0a33c' : '#5fa8d3';
+      rr(ctx, gx, gy, Math.max(2, (T - 6) * wv), 4, 2);
+      ctx.fill();
       break;
     }
     case 'rack':

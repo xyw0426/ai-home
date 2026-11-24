@@ -2,8 +2,8 @@ import type { AgentId, Pt, RoomId } from './types';
 
 /**
  * 房屋平面：参照一张竖版户型图重新设计，36×45 格。
- * 上方是阳台；左列书房、餐厅（与客厅相通）、厨房、儿童房；中间是大客厅；
- * 右列主卧、衣帽间、卫生间、奶奶房；底部储物间（机器人充电座）和玄关走廊。
+ * 上方是种满绿植的阳台；左列是爸爸的工作室、餐厅（与客厅相通，餐桌下面一排咖啡机）、厨房、乐乐的房间；
+ * 中间是大客厅；右列从上到下是主卧、奶奶房、浴室、影音室；影音室左边是储物间（机器人充电座）；底部是玄关走廊。
  * 只需定义房间矩形和门，墙由程序自动生成，房子外面是“室外”空地。
  */
 export const W = 36;
@@ -37,15 +37,15 @@ function room(id: RoomId, name: string, floor: FloorStyle, ...rects: [number, nu
 
 export const ROOMS: RoomDef[] = [
   room('balcony', '阳台', 'deck', [10, 1, 23, 4]),
-  room('study', '书房', 'parquet', [1, 6, 9, 15]),
+  room('study', '工作室', 'parquet', [1, 6, 9, 15]),
   room('dining', '餐厅', 'oak', [1, 17, 9, 26]),
   room('kitchen', '厨房', 'tile', [1, 28, 9, 33]),
-  room('kids', '儿童房', 'carpet', [1, 35, 9, 43]),
+  room('kids', '乐乐的房间', 'carpet', [1, 35, 9, 43]),
   room('living', '客厅', 'honey', [11, 6, 22, 33], [10, 17, 10, 26], [11, 34, 15, 41]),
   room('master', '主卧', 'wood', [24, 6, 34, 15]),
-  room('closet', '衣帽间', 'rose', [24, 17, 34, 22]),
-  room('bathroom', '卫生间', 'aqua', [24, 24, 34, 29]),
-  room('grandma', '奶奶房', 'warm', [24, 31, 34, 40]),
+  room('grandma', '奶奶房', 'warm', [24, 17, 34, 22]),
+  room('bathroom', '浴室', 'aqua', [24, 24, 34, 29]),
+  room('theater', '影音室', 'rose', [24, 31, 34, 40]),
   room('storage', '储物间', 'plain', [17, 35, 22, 40]),
   room('corridor', '玄关走廊', 'runner', [11, 42, 34, 43]),
 ];
@@ -65,11 +65,11 @@ export const DOORS: Pt[] = [
   { x: 8, y: 27 }, // 厨房—餐厅
   { x: 10, y: 38 }, // 儿童房—客厅
   { x: 23, y: 8 }, // 主卧—客厅
-  { x: 32, y: 16 }, // 主卧—衣帽间
-  { x: 25, y: 23 }, // 衣帽间—卫生间
-  { x: 23, y: 27 }, // 卫生间—客厅
-  { x: 23, y: 33 }, // 奶奶房—客厅
-  { x: 23, y: 38 }, // 奶奶房—储物间
+  { x: 23, y: 21 }, // 奶奶房—客厅
+  { x: 25, y: 23 }, // 奶奶房—浴室
+  { x: 23, y: 27 }, // 浴室—客厅
+  { x: 23, y: 32 }, // 影音室—客厅
+  { x: 23, y: 38 }, // 影音室—储物间
   { x: 16, y: 38 }, // 储物间—客厅
 ];
 
@@ -80,7 +80,7 @@ export const WALL_DECOR: { type: 'clock' | 'board' | 'window' | 'frontdoor' | 'm
   { type: 'window', x: 2, y: 27, w: 3 },
   { type: 'window', x: 27, y: 5, w: 5 },
   { type: 'window', x: 0, y: 20, w: 1 },
-  { type: 'window', x: 35, y: 34, w: 1 },
+  { type: 'window', x: 35, y: 25, w: 1 },
   { type: 'painting', x: 3, y: 16, w: 2 },
   { type: 'frontdoor', x: 33, y: 44, w: 2 },
   { type: 'mat', x: 33, y: 43, w: 2 },
@@ -187,12 +187,14 @@ const TABLE_SEATS: [number, number][] = [
 ];
 
 export const FURNITURE: FurnitureDef[] = [
-  // 阳台
-  F('plants', 'plants', '花架', 'balcony', [[10, 1], [11, 1], [22, 1], [23, 1]], { solid: true, spots: [[11, 2], [22, 2]] }),
+  // 阳台：四组盆栽，每组单独计算水分
+  F('planter_l', 'plants', '左边的盆栽', 'balcony', [[10, 1], [11, 1], [12, 1], [10, 2]], { solid: true, spots: [[11, 2]] }),
+  F('planter_r', 'plants', '右边的盆栽', 'balcony', [[21, 1], [22, 1], [23, 1], [23, 2]], { solid: true, spots: [[22, 2]] }),
+  F('planter_bl', 'plants', '门边的盆栽', 'balcony', [[10, 4], [11, 4]], { solid: true, spots: [[11, 3]] }),
+  F('planter_br', 'plants', '龟背竹和花盆', 'balcony', [[22, 4], [23, 4], [23, 3]], { solid: true, spots: [[22, 3]] }),
   F('rattan', 'rattan', '藤椅', 'balcony', [[15, 2], [18, 2]], { seat: true, spots: [[15, 2], [18, 2]] }),
   F('balcony_table', 'teatable', '小茶桌', 'balcony', [[16, 2], [17, 2]], { solid: true }),
   F('rack', 'rack', '晾衣架', 'balcony', [[16, 4], [17, 4]], { solid: true }),
-  F('balcony_plant', 'plant', '龟背竹', 'balcony', [[23, 4]], { solid: true }),
   F('lamp_balcony', 'lamp', '阳台灯', 'balcony', [[17, 3]], { spots: [[14, 4]], sw: [14, 5] }),
   // 书房
   F('bookshelf', 'bookshelf', '书架', 'study', [[1, 6], [2, 6], [3, 6]], { solid: true, spots: [[2, 7]] }),
@@ -200,16 +202,15 @@ export const FURNITURE: FurnitureDef[] = [
   F('study_chair', 'armchair', '阅读椅', 'study', [[3, 12]], { seat: true, spots: [[3, 12]] }),
   F('study_cabinet', 'cabinet', '文件柜', 'study', [[9, 11], [9, 12]], { solid: true }),
   F('study_plant', 'plant', '绿植', 'study', [[9, 6]], { solid: true }),
-  F('lamp_study', 'lamp', '书房灯', 'study', [[5, 11]], { spots: [[7, 15]], sw: [7, 16] }),
+  F('lamp_study', 'lamp', '工作室灯', 'study', [[5, 11]], { spots: [[7, 15]], sw: [7, 16] }),
   // 餐厅
   F('table', 'table', '长餐桌', 'dining', rect(3, 19, 8, 20), {
     solid: true,
     spots: TABLE_SEATS,
     owners: ['dad', 'mom', 'grandma', 'kid'],
   }),
-  F('sideboard', 'cabinet', '餐边柜', 'dining', [[1, 23], [2, 23], [3, 23], [4, 23]], { solid: true }),
-  F('coffee', 'coffee', '咖啡机', 'dining', [[5, 23]], { solid: true, spots: [[5, 24]] }),
-  F('bar', 'counter', '吧台', 'dining', [[1, 26], [2, 26], [3, 26], [4, 26], [5, 26], [6, 26]], { solid: true }),
+  F('coffee', 'coffee', '一排咖啡机', 'dining', [[1, 23], [2, 23], [3, 23], [4, 23], [5, 23], [6, 23]], { solid: true, spots: [[2, 24], [5, 24]] }),
+  F('bar', 'counter', '水吧台', 'dining', [[1, 26], [2, 26], [3, 26], [4, 26], [5, 26], [6, 26]], { solid: true }),
   F('dining_plant', 'plant', '绿植', 'dining', [[1, 17]], { solid: true }),
   F('lamp_dining', 'lamp', '餐厅灯', 'dining', [[5, 20]], { spots: [[9, 17]], sw: [9, 16] }),
   // 厨房
@@ -245,30 +246,35 @@ export const FURNITURE: FurnitureDef[] = [
   F('nightstand_l', 'nightstand', '床头柜', 'master', [[29, 7]], { solid: true }),
   F('nightstand_r', 'nightstand', '床头柜', 'master', [[32, 7]], { solid: true }),
   F('master_wardrobe', 'wardrobe', '衣柜', 'master', [[24, 6], [25, 6]], { solid: true }),
-  F('vanity', 'vanity', '梳妆台', 'master', [[26, 13], [27, 13]], { solid: true }),
+  F('vanity', 'vanity', '书桌', 'master', [[26, 13], [27, 13]], { solid: true }),
+  F('mirror', 'mirror', '穿衣镜', 'master', [[24, 14]], { solid: true, spots: [[25, 14]] }),
   F('master_plant', 'plant', '绿植', 'master', [[34, 6]], { solid: true }),
   F('lamp_master', 'lamp', '主卧灯', 'master', [[29, 11]], { spots: [[24, 9]], sw: [23, 9] }),
-  // 衣帽间
-  F('closet_left', 'wardrobe', '衣柜', 'closet', [[24, 17], [24, 18], [24, 19]], { solid: true }),
-  F('closet_top', 'wardrobe', '衣柜', 'closet', [[26, 17], [27, 17], [28, 17], [29, 17], [30, 17]], { solid: true }),
-  F('mirror', 'mirror', '穿衣镜', 'closet', [[34, 19]], { solid: true, spots: [[33, 19]] }),
-  F('dresser', 'cabinet', '斗柜', 'closet', [[28, 22], [29, 22], [30, 22], [31, 22]], { solid: true }),
-  F('lamp_closet', 'lamp', '衣帽间灯', 'closet', [[29, 20]], { spots: [[33, 17]], sw: [33, 16] }),
-  // 卫生间
+  // 奶奶房
+  F('grandma_wardrobe', 'wardrobe', '衣柜', 'grandma', [[24, 17], [24, 18], [24, 19]], { solid: true }),
+  F('grandma_shelf', 'cabinet', '置物架', 'grandma', [[27, 17], [28, 17], [29, 17], [30, 17]], { solid: true }),
+  F('bed_grandma', 'bed', '奶奶的床', 'grandma', rect(33, 18, 34, 19), { seat: true, spots: [[33, 18]], owners: ['grandma'] }),
+  F('grandma_plant', 'plant', '绿植', 'grandma', [[34, 17]], { solid: true }),
+  F('radio', 'radio', '收音机', 'grandma', [[30, 22]], { solid: true, spots: [[30, 21]] }),
+  F('grandma_cab', 'cabinet', '五斗柜', 'grandma', [[26, 22], [27, 22], [28, 22]], { solid: true }),
+  F('grandma_vanity', 'vanity', '梳妆台', 'grandma', [[34, 21]], { solid: true }),
+  F('lamp_grandma', 'lamp', '奶奶房灯', 'grandma', [[29, 19]], { spots: [[24, 22]], sw: [23, 22] }),
+  // 浴室
   F('basin', 'basin', '洗手台', 'bathroom', [[27, 24], [28, 24]], { solid: true, spots: [[27, 25]] }),
   F('toilet', 'toilet', '马桶', 'bathroom', [[34, 24]], { solid: true }),
   F('bathtub', 'bathtub', '浴缸', 'bathroom', rect(32, 28, 34, 29), { seat: true, spots: [[33, 28]] }),
   F('shower', 'shower', '淋浴间', 'bathroom', [[24, 29], [25, 29]], { solid: true }),
   F('washer', 'washer', '洗衣机', 'bathroom', [[28, 29]], { solid: true, spots: [[28, 28]] }),
-  F('lamp_bathroom', 'lamp', '卫生间灯', 'bathroom', [[29, 26]], { spots: [[24, 26]], sw: [23, 26] }),
-  // 奶奶房
-  F('bed_grandma', 'bed', '奶奶的床', 'grandma', rect(33, 32, 34, 33), { seat: true, spots: [[33, 32]], owners: ['grandma'] }),
-  F('radio', 'radio', '收音机', 'grandma', [[30, 31]], { solid: true, spots: [[30, 32]] }),
-  F('grandma_wardrobe', 'wardrobe', '衣柜', 'grandma', [[24, 31], [25, 31]], { solid: true }),
-  F('grandma_table', 'teatable', '小方桌', 'grandma', [[29, 36]], { solid: true }),
-  F('grandma_cab', 'cabinet', '五斗柜', 'grandma', [[31, 40], [32, 40]], { solid: true }),
-  F('grandma_plant', 'plant', '绿植', 'grandma', [[34, 40]], { solid: true }),
-  F('lamp_grandma', 'lamp', '奶奶房灯', 'grandma', [[29, 35]], { spots: [[24, 32]], sw: [23, 32] }),
+  F('lamp_bathroom', 'lamp', '浴室灯', 'bathroom', [[29, 26]], { spots: [[24, 26]], sw: [23, 26] }),
+  // 影音室
+  F('theater_tv', 'tv', '大电视', 'theater', [[34, 33], [34, 34], [34, 35], [34, 36]], { solid: true, spots: [[27, 33], [27, 34], [27, 35], [27, 36]] }),
+  F('theater_sofa', 'sofa', '影音室沙发', 'theater', [[27, 33], [27, 34], [27, 35], [27, 36]], { seat: true, spots: [[27, 33], [27, 34], [27, 35], [27, 36]] }),
+  F('theater_table', 'teatable', '圆茶几', 'theater', [[30, 35]], { solid: true }),
+  F('theater_chairs', 'rattan', '小圆椅', 'theater', [[29, 31], [31, 31]], { seat: true, spots: [[29, 31], [31, 31]] }),
+  F('theater_shelf', 'cabinet', '碟片柜', 'theater', [[33, 31], [34, 31]], { solid: true }),
+  F('theater_plant', 'plant', '绿植', 'theater', [[25, 40]], { solid: true }),
+  F('theater_plant2', 'plant', '绿植', 'theater', [[34, 40]], { solid: true }),
+  F('lamp_theater', 'lamp', '影音室灯', 'theater', [[30, 38]], { spots: [[24, 33]], sw: [23, 33] }),
   // 储物间
   F('storage_shelf', 'shelf', '储物架', 'storage', [[19, 35], [20, 35], [21, 35]], { solid: true }),
   F('boxes', 'boxes', '纸箱', 'storage', [[17, 35]], { solid: true }),
@@ -542,8 +548,9 @@ export class HouseMap {
           ];
       for (const e of ends) {
         // 选端点附近最靠墙的可走格子
+        const useSpots = new Set(this.furniture.filter((f) => f.type !== 'dock').flatMap((f) => f.spots.map((p) => this.idx(p.x, p.y))));
         const cands = this.roomCells[r.id]
-          .filter((i) => this.walk[i] === 1)
+          .filter((i) => this.walk[i] === 1 && !useSpots.has(i))
           .map((i) => this.pt(i))
           .sort((p, q) => Math.abs(p.x - e.x) + Math.abs(p.y - e.y) - (Math.abs(q.x - e.x) + Math.abs(q.y - e.y)));
         const c = cands[0];

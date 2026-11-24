@@ -8,7 +8,7 @@ import { Rng } from './rng';
 /* ------------------------------------------------------------------ */
 
 const ROOM_WORDS: [RegExp, RoomId][] = [
-  [/书房/, 'study'],
+  [/书房|工作室/, 'study'],
   [/儿童房|乐乐(的)?房间|孩子(的)?房间/, 'kids'],
   [/奶奶(的)?房|奶奶屋|奶奶的屋/, 'grandma'],
   [/主卧|卧室|我们(的)?房间/, 'master'],
@@ -17,7 +17,7 @@ const ROOM_WORDS: [RegExp, RoomId][] = [
   [/餐厅|饭厅/, 'dining'],
   [/客厅|大厅/, 'living'],
   [/阳台/, 'balcony'],
-  [/衣帽间/, 'closet'],
+  [/影音室|放映室|家庭影院|看电影的(房间|屋)/, 'theater'],
   [/卫生间|洗手间|浴室|厕所/, 'bathroom'],
   [/储物间|杂物间/, 'storage'],
 ];
@@ -102,8 +102,8 @@ export function ruleParse(req: ParseRequest): ParseResult {
     return { kind: 'task', task: { action: 'washer_start', room: 'bathroom', trigger, condition: 'none' } };
   }
 
-  if (/电视/.test(text) && /关/.test(text)) {
-    return { kind: 'task', task: { action: 'tv_off', room: 'living', trigger, condition } };
+  if (/电视|投影|电影/.test(text) && /关/.test(text)) {
+    return { kind: 'task', task: { action: 'tv_off', room: room === 'theater' ? 'theater' : 'living', trigger, condition } };
   }
 
   if (/灯/.test(text)) {

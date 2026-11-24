@@ -3,6 +3,8 @@ import { ACTIVITIES, PERSONAS, type ActivityKind, type Persona } from './persona
 import type { DialogueRequest, LLMProvider, ParseResult } from './llm';
 import { Rng } from './rng';
 import { RobotBrain } from './robot';
+import { PLANT_DRY_SEC, PLANT_YELLOW, leafState } from './plants';
+export { PLANT_DRY_SEC, PLANT_YELLOW, leafState };
 import { AGENT_IDS, FAMILY_IDS, TICK_SEC, at, dayOf, dist, hm, tod, type AgentId, type Pt, type RoomId } from './types';
 
 export const TALK_R = 4;
@@ -85,6 +87,9 @@ export interface FurnState {
   users: AgentId[];
   mode?: 'served' | 'dirty' | 'none' | 'running' | 'idle';
   runUntil?: number;
+  /** 盆栽水分 0..1，低于 0.35 叶子发黄 */
+  water?: number;
+  wateredAt?: number;
 }
 
 export interface Conversation {
@@ -148,6 +153,7 @@ export class World {
     for (const f of this.map.furniture) this.fs[f.id] = { on: false, users: [] };
     this.fs.table.mode = 'none';
     this.fs.washer.mode = 'idle';
+    for (const f of this.map.furniture) if (f.type === 'plants') this.fs[f.id].water = 0.8;
     this.agents = {} as Record<AgentId, Agent>;
     for (const id of AGENT_IDS) {
       const p = PERSONAS[id];
@@ -285,6 +291,11 @@ export class World {
       const anyAte = this.family.some((a) => a.ateSec >= LUNCH_EAT_SEC);
       if ((pending.length === 0 && anyAte) || s >= LUNCH_HARD_END) this.endLunch();
     }
+    // 盆栽慢慢变干
+    for (const f of this.planters) {
+      const fs = this.fs[f.id];
+      fs.water = Math.max(0, (fs.water ?? 1) - TICK_SEC / PLANT_DRY_SEC);
+    }
     // 洗衣机计时
     const wsh = this.fs.washer;
     if (wsh.mode === 'running' && wsh.runUntil !== undefined && this.t >= wsh.runUntil) {
@@ -305,6 +316,30 @@ export class World {
       } else if (!a.controlled) a.afterLunchPending = true;
     }
     this.emit('activity_end', '午饭结束了（午饭结束事件）', undefined, { activity: 'lunch' });
+  }
+
+  /** 阳台上的各组盆栽 */
+  get planters(): FurnitureDef[] {
+    return this.map.furniture.filter((f) => f.type === 'plants');
+  }
+
+  driestPlanter(): { f: FurnitureDef; water: number } | null {
+    let best: { f: FurnitureDef; water: number } | null = null;
+    for (const f of this.planters) {
+      const wv = this.fs[f.id].water ?? 1;
+      if (!best || wv < best.water) best = { f, water: wv };
+    }
+    return best;
+  }
+
+  waterPlanter(fid: string, by: Agent) {
+    const fs = this.fs[fid];
+    const f = this.map.byId.get(fid)!;
+    const before = fs.water ?? 1;
+    fs.water = 1;
+    fs.wateredAt = this.t;
+    const note = before < PLANT_YELLOW ? '，发黄的叶子慢慢变回了绿色' : '，叶子上挂着水珠';
+    this.emit('furniture', `${by.name}给${f.name}浇了水${note}`, by.id, { fid, water: before });
   }
 
   /* ---------------- 家人自主行为 ---------------- */
@@ -395,7 +430,11 @@ export class World {
       if (p.kind === 'bath') w = s >= at(18, 30) ? w * 3 : 0; // 晚上才泡澡
       if (p.kind === 'wash_up') w = s >= at(20, 0) || s < at(9, 0) ? w * 4 : w * 0.3;
       if (p.kind === 'listen_piano') w = this.fs.piano.users.length ? w * 3 : 0; // 有人弹琴才去听
-      if (p.kind === 'water_plants' && (this.fs.plants.runUntil ?? 0) > this.t) w = 0; // 刚浇过
+      if (p.kind === 'water_plants') {
+        const d = this.driestPlanter()?.water ?? 1;
+        w = d < PLANT_YELLOW ? w * 4 : d < 0.6 ? w : 0; // 叶子发黄了更想去浇
+      }
+      if (p.kind === 'watch_movie') w = s >= at(19, 0) ? w * 3 : s >= at(14, 0) ? w : 0;
       if (p.kind === 'balcony_tea' && !(s >= at(8, 0) && s < at(18, 0))) w = 0;
       if (p.kind === 'make_coffee' && s >= at(17, 0)) w *= 0.2;
       return { item: p.kind, w };
@@ -468,7 +507,15 @@ export class World {
       if (kind === 'do_laundry' && !opts.byUser && this.t - this.lastLaundryAt < 3 * 3600) return false;
       if (kind === 'cook' && this.fs.stove.users.length) return false;
       if (kind === 'play_piano' && this.fs.piano.users.length) return false;
-      if (kind === 'water_plants' && !opts.byUser && (this.fs.plants.runUntil ?? 0) > this.t) return false;
+      if (kind === 'water_plants' && !opts.fid) {
+        // 自己去浇花：挑最干的一组（水分还多的不浇）
+        candidates = this.planters
+          .filter((f) => opts.byUser || (this.fs[f.id].water ?? 1) < 0.75)
+          .sort((p, q) => (this.fs[p.id].water ?? 1) - (this.fs[q.id].water ?? 1))
+          .slice(0, 1)
+          .map((f) => f.id);
+        if (!candidates.length) return false;
+      }
       let best: { fid: string; spot: Pt } | null = null;
       for (const c of candidates) {
         const f = this.map.byId.get(c);
@@ -567,8 +614,7 @@ export class World {
         }
         break;
       case 'water_plants':
-        this.fs.plants.runUntil = this.t + 3 * 3600;
-        this.emit('furniture', `${a.name}给阳台的花浇了水，叶子上挂着水珠`, a.id, { fid: 'plants' });
+        if (act.fid) this.waterPlanter(act.fid, a);
         break;
       case 'read_book':
         // 在阅读椅上读书：书是从书房书架上取的
@@ -583,14 +629,16 @@ export class World {
         this.emit('furniture', `${a.name}启动了洗衣机（约40分钟）`, a.id, { fid: 'washer' });
         break;
       }
-      case 'watch_tv': {
-        const tv = this.fs.tv;
+      case 'watch_tv':
+      case 'watch_movie': {
+        const [tvId, sofaId] = act.kind === 'watch_movie' ? ['theater_tv', 'theater_sofa'] : ['tv', 'sofa'];
+        const tv = this.fs[tvId];
         if (!tv.on) {
           tv.on = true;
-          this.emit('furniture', `${a.name}打开了电视`, a.id, { fid: 'tv' });
+          this.emit('furniture', act.kind === 'watch_movie' ? `${a.name}打开了影音室的大电视，放起了电影` : `${a.name}打开了电视`, a.id, { fid: tvId });
         }
         if (!tv.users.includes(a.id)) tv.users.push(a.id);
-        if (!this.fs.sofa.users.includes(a.id)) this.fs.sofa.users.push(a.id);
+        if (!this.fs[sofaId].users.includes(a.id)) this.fs[sofaId].users.push(a.id);
         break;
       }
       case 'sleep':
@@ -635,13 +683,15 @@ export class World {
       case 'listen_radio':
         if (fs && fs.users.length === 0) fs.on = false;
         break;
-      case 'watch_tv': {
-        const tv = this.fs.tv;
+      case 'watch_tv':
+      case 'watch_movie': {
+        const [tvId, sofaId] = act.kind === 'watch_movie' ? ['theater_tv', 'theater_sofa'] : ['tv', 'sofa'];
+        const tv = this.fs[tvId];
         tv.users = tv.users.filter((u) => u !== a.id);
-        this.fs.sofa.users = this.fs.sofa.users.filter((u) => u !== a.id);
+        this.fs[sofaId].users = this.fs[sofaId].users.filter((u) => u !== a.id);
         if (tv.users.length === 0 && tv.on) {
           tv.on = false;
-          this.emit('furniture', `${a.name}看完电视，顺手关掉了`, a.id, { fid: 'tv' });
+          this.emit('furniture', `${a.name}看完${act.kind === 'watch_movie' ? '电影' : '电视'}，顺手关掉了`, a.id, { fid: tvId });
         }
         break;
       }
@@ -680,15 +730,14 @@ export class World {
       const on = action === 'light_on' ? true : action === 'light_off' ? false : !this.fs[fid].on;
       this.setLight(f.room, on, a);
     } else if (f.type === 'tv') {
-      const tv = this.fs.tv;
+      const tv = this.fs[fid];
       tv.on = action === 'tv_on' ? true : action === 'tv_off' ? false : !tv.on;
-      this.emit('furniture', `${a.name}${tv.on ? '打开' : '关掉'}了电视`, a.id, { fid });
+      this.emit('furniture', `${a.name}${tv.on ? '打开' : '关掉'}了${f.name}`, a.id, { fid });
     } else if (f.type === 'stove') {
       this.fs.stove.on = false;
       this.emit('furniture', `${a.name}关掉了灶台的火`, a.id, { fid });
     } else if (f.type === 'plants') {
-      this.fs.plants.runUntil = this.t + 3 * 3600;
-      this.emit('furniture', `${a.name}给阳台的花浇了水`, a.id, { fid });
+      this.waterPlanter(fid, a);
     } else if (f.type === 'washer') {
       const w = this.fs.washer;
       if (w.mode !== 'running') {
@@ -1069,7 +1118,7 @@ export class World {
         out.push({ id: fs.on ? 'toggle:light_off' : 'toggle:light_on', label: fs.on ? '关灯' : '开灯' });
         break;
       case 'tv':
-        if (!isRobot) out.push({ id: 'watch_tv', label: '坐下看电视' });
+        if (!isRobot) out.push(f.id === 'theater_tv' ? { id: 'watch_movie', label: '坐下看电影' } : { id: 'watch_tv', label: '坐下看电视' });
         out.push({ id: fs.on ? 'toggle:tv_off' : 'toggle:tv_on', label: fs.on ? '关电视' : '开电视' });
         break;
       case 'washer':
@@ -1092,7 +1141,8 @@ export class World {
         if (!isRobot) out.push({ id: 'wash_dishes', label: '洗碗' });
         break;
       case 'sofa':
-        if (!isRobot) out.push({ id: 'sofa_rest', label: '坐沙发休息' }, { id: 'watch_tv', label: '坐下看电视' });
+        if (!isRobot && f.id === 'theater_sofa') out.push({ id: 'watch_movie', label: '坐下看电影' });
+        else if (!isRobot) out.push({ id: 'sofa_rest', label: '坐沙发休息' }, { id: 'watch_tv', label: '坐下看电视' });
         break;
       case 'armchair':
         if (!isRobot) out.push(f.id === 'rocker' ? { id: 'rest_chair', label: '坐摇椅休息' } : { id: 'read_book', label: '坐下读书' });
@@ -1113,7 +1163,7 @@ export class World {
         out.push(isRobot ? { id: 'toggle:water_plants', label: '浇花' } : { id: 'water_plants', label: '给花浇水' });
         break;
       case 'rattan':
-        if (!isRobot) out.push({ id: 'balcony_tea', label: '坐下喝茶晒太阳' });
+        if (!isRobot) out.push(f.room === 'theater' ? { id: 'watch_movie', label: '坐下看电影' } : { id: 'balcony_tea', label: '坐下喝茶晒太阳' });
         break;
       case 'mirror':
         if (!isRobot) out.push({ id: 'dress_up', label: '试试衣服' });
@@ -1173,8 +1223,8 @@ export class World {
       case 'coffee':
         return fs.on ? `正在出咖啡，${names}在等` : '待机';
       case 'plants': {
-        const left = (fs.runUntil ?? 0) - this.t;
-        return left > 0 ? `刚浇过水（还湿润约${Math.ceil(left / 60)}分钟）${names ? `，${names}在照料` : ''}` : '土有点干了，可以浇水';
+        const wv = fs.water ?? 1;
+        return `水分 ${Math.round(wv * 100)}%，叶子${leafState(wv)}${wv < PLANT_YELLOW ? '，该浇水了' : ''}${names ? `，${names}在浇水` : ''}`;
       }
       case 'radio':
         return fs.on ? `正在播戏曲，${names}在听` : '关着';

@@ -9,6 +9,7 @@ export const DEMO_START = at(11, 30);
  * 可反复运行的演示场景：第 1 天 11:30（午饭前）。
  * 爸爸在书房用电脑（书房灯亮着），妈妈在厨房做饭，乐乐在儿童房搭积木，
  * 奶奶在客厅摇椅上休息，机器人小暖从储物间的充电座旁出发巡视。
+ * 阳台上有两组盆栽缺水，叶子发黄。
  */
 export function createDemoWorld(llm: LLMProvider, seed = DEMO_SEED): World {
   const w = new World(llm, { seed, startTime: DEMO_START });
@@ -19,11 +20,16 @@ export function createDemoWorld(llm: LLMProvider, seed = DEMO_SEED): World {
   w.place('robot', 18, 39);
   w.fs.lamp_study.on = true;
   w.fs.lamp_kitchen.on = true;
+  // 阳台盆栽：左边和门边两组好几天没浇，叶子已经发黄
+  w.fs.planter_l.water = 0.18;
+  w.fs.planter_bl.water = 0.28;
+  w.fs.planter_r.water = 0.55;
+  w.fs.planter_br.water = 0.85;
 
   w.startActivity(w.agents.dad, 'use_computer', { durMin: 25 });
   w.startActivity(w.agents.mom, 'cook', { until: at(11, 58), label: '做午饭' });
   w.startActivity(w.agents.kid, 'play_toys', { durMin: 30 });
   w.startActivity(w.agents.grandma, 'rest_chair', { durMin: 30 });
-  w.emit('system', '演示场景开始：第1天 11:30，午饭前。书房的灯开着。');
+  w.emit('system', '演示场景开始：第1天 11:30，午饭前。工作室的灯开着，阳台有两组盆栽叶子发黄了。');
   return w;
 }
