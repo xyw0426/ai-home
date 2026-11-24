@@ -428,3 +428,27 @@ describe('影音室', () => {
     expect(off).toBe(true);
   });
 });
+
+describe('家具状态窗口', () => {
+  test('每件可交互家具都有状态文字和状态类别，并随使用变化', async () => {
+    const w = demoWorld();
+    const items = w.map.furniture.filter((f) => f.interactive);
+    expect(items.length).toBeGreaterThan(30);
+    for (const f of items) {
+      expect(w.furnitureStatus(f).length, f.id).toBeGreaterThan(0);
+      expect(['busy', 'on', 'alert', 'idle']).toContain(w.furnitureState(f));
+    }
+    const get = (id: string) => w.map.byId.get(id)!;
+    // 开局：发黄的盆栽需要照料；工作室有人用电脑
+    expect(w.furnitureState(get('planter_l'))).toBe('alert');
+    await runUntil(w, () => w.fs.computer.on, 30);
+    expect(w.furnitureState(get('computer'))).toBe('busy');
+    // 洗衣机运行中 = 开着
+    w.applyToggle(w.agents.robot, 'washer', 'washer_start');
+    expect(w.furnitureState(get('washer'))).toBe('on');
+    // 白天没人的房间灯亮着 = 需要照料
+    w.fs.lamp_master.on = true;
+    expect(w.furnitureState(get('lamp_master'))).toBe('alert');
+    expect(w.furnitureStatus(get('lamp_master'))).toBe('灯亮着，屋里没人');
+  });
+});

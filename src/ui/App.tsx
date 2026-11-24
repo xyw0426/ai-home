@@ -7,6 +7,7 @@ import type { World } from '../sim/world';
 import { ApiModal } from './ApiModal';
 import { MapView } from './MapView';
 import { EventLog, FamilyPanel, RobotPanel } from './Panels';
+import { FurniturePanel } from './FurniturePanel';
 
 const BASE_TICK_MS = 250; // 1× 时每步（10 游戏秒）的真实毫秒数
 const SPEEDS = [1, 2, 4, 8, 16];
@@ -22,6 +23,8 @@ export function App() {
   const [paused, setPaused] = useState(false);
   const [ffTarget, setFfTarget] = useState<number | null>(null);
   const [robotView, setRobotView] = useState(false);
+  const [showFurniture, setShowFurniture] = useState(true);
+  const [focus, setFocus] = useState<{ fid: string; at: number } | null>(null);
   const [selected, setSelected] = useState<AgentId | null>('robot');
   const [showApi, setShowApi] = useState(false);
   const [input, setInput] = useState('');
@@ -207,16 +210,23 @@ export function App() {
               <input type="checkbox" checked={robotView} onChange={(e) => setRobotView(e.target.checked)} />
               <span>👁 机器人视角</span>
             </label>
+            <button className={`btn small ${showFurniture ? 'on' : ''}`} onClick={() => setShowFurniture((v) => !v)} aria-pressed={showFurniture}>
+              🛋 家具状态
+            </button>
             <span className="legend">
               {robotView ? '亮黄色格子 = 小暖此刻能看见；暗处被墙挡住或超出 7 格视野' : '点击人物查看详情，点击家具查看状态'}
             </span>
           </div>
+          {showFurniture && (
+            <FurniturePanel world={w} onFocus={(fid) => setFocus({ fid, at: Date.now() })} onClose={() => setShowFurniture(false)} />
+          )}
           <MapView
             world={w}
             robotView={robotView}
             selected={selected}
             onSelect={setSelected}
             alphaRef={alphaRef}
+            focus={focus}
           />
           <div className={`dock ${ctl ? 'active' : ''}`}>
             {ctl ? (

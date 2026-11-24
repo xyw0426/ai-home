@@ -10,6 +10,8 @@ interface Props {
   selected: AgentId | null;
   onSelect: (id: AgentId | null) => void;
   alphaRef: MutableRefObject<number>;
+  /** 要在地图上定位并高亮的家具 */
+  focus?: { fid: string; at: number } | null;
 }
 
 interface Menu {
@@ -22,10 +24,11 @@ type Zoom = 'all' | 'width' | number;
 
 const NOT_CLICKABLE = new Set(['plant', 'counter', 'wardrobe', 'cabinet', 'coffeetable', 'teatable', 'nightstand', 'microwave', 'toilet', 'shower', 'shelf', 'boxes', 'shoecab', 'floorlamp', 'vanity', 'rack']);
 
-export function MapView({ world, robotView, selected, onSelect, alphaRef }: Props) {
+export function MapView({ world, robotView, selected, onSelect, alphaRef, focus }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hoverRef = useRef<{ x: number; y: number } | null>(null);
+  const highlightRef = useRef<{ fid: string; until: number } | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [zoom, setZoom] = useState<Zoom>('width');
   const [follow, setFollow] = useState(true);
@@ -60,7 +63,15 @@ export function MapView({ world, robotView, selected, onSelect, alphaRef }: Prop
     const draw = (now: number) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const o = optsRef.current;
-      drawWorld(ctx, o.world, { robotView: o.robotView, selected: o.selected, hover: hoverRef.current, alpha: alphaRef.current, now });
+      const hl = highlightRef.current && now < highlightRef.current.until ? o.world.map.byId.get(highlightRef.current.fid) : undefined;
+      drawWorld(ctx, o.world, {
+        robotView: o.robotView,
+        selected: o.selected,
+        hover: hoverRef.current,
+        alpha: alphaRef.current,
+        now,
+        highlight: hl ? (hl.type === 'lamp' ? [hl.cells[0], ...(hl.switchAt ? [hl.switchAt] : [])] : hl.cells) : undefined,
+      });
       // 跟随：让被控制或被选中的角色留在视野中间区域
       const el = scrollRef.current;
       const target = o.world.controlled ?? (o.selected ? o.world.agents[o.selected] : null);
@@ -84,6 +95,22 @@ export function MapView({ world, robotView, selected, onSelect, alphaRef }: Prop
   }, [alphaRef]);
 
   useEffect(() => setMenu(null), [world]);
+
+  // 从家具状态窗口点击：滚动到那件家具并闪烁高亮几秒
+  useEffect(() => {
+    if (!focus) return;
+    const f = world.map.byId.get(focus.fid);
+    const el = scrollRef.current;
+    if (!f || !el) return;
+    setFollow(false);
+    optsRef.current = { ...optsRef.current, follow: false };
+    const xs = f.cells.map((c) => c.x);
+    const ys = f.cells.map((c) => c.y);
+    const cx = ((Math.min(...xs) + Math.max(...xs) + 1) / 2) * T * scaleRef.current;
+    const cy = ((Math.min(...ys) + Math.max(...ys) + 1) / 2) * T * scaleRef.current;
+    el.scrollTo({ left: cx - el.clientWidth / 2, top: cy - el.clientHeight / 2, behavior: 'smooth' });
+    highlightRef.current = { fid: f.id, until: performance.now() + 3500 };
+  }, [focus, world]);
 
   const cellOf = (e: React.MouseEvent) => {
     const r = canvasRef.current!.getBoundingClientRect();

@@ -62,7 +62,7 @@ input { font: inherit; color: inherit; }
 .link { border: 0; background: none; color: var(--red); padding: 0; font-size: 12px; text-decoration: underline; }
 
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; padding: 16px 20px 24px; align-items: start; }
-.stage { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stage { display: flex; flex-direction: column; gap: 10px; min-width: 0; position: relative; }
 .stage-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .legend { font-size: 12px; color: var(--muted); }
 .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
@@ -248,3 +248,50 @@ body {
 .say { border: 2px solid var(--line); border-radius: 999px; padding: 8px 16px; }
 .fmenu { border: 3px solid var(--wall); outline: 1px solid var(--wall-edge); outline-offset: -1px; border-radius: 10px; box-shadow: 0 4px 0 #efcfae; }
 .fmenu-title { font-family: var(--title-font); font-weight: 400; font-size: 16px; color: #6b4228; }
+
+
+/* ---------- 家具状态窗口 ---------- */
+.btn.on { background: var(--accent); border-color: var(--accent-2); color: #fff; box-shadow: 0 2px 0 #b8652f; }
+.fpanel {
+  position: absolute; z-index: 6; width: 340px; max-width: calc(100% - 16px);
+  background: var(--panel); border: 3px solid var(--wall); outline: 1px solid var(--wall-edge); outline-offset: -1px;
+  border-radius: 10px; box-shadow: 0 4px 0 #efcfae, 0 12px 30px rgba(90, 60, 30, 0.18);
+  display: flex; flex-direction: column; max-height: min(560px, calc(100vh - 220px));
+}
+.fpanel-head {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; cursor: grab; user-select: none; touch-action: none;
+  background-color: var(--wall);
+  background-image: linear-gradient(#e9b98c 1px, transparent 1px), linear-gradient(90deg, #e9b98c 1px, transparent 1px);
+  background-size: 13px 13px; border-radius: 6px 6px 0 0;
+}
+.fpanel-head:active { cursor: grabbing; }
+.fpanel-title { font-family: var(--title-font); font-size: 17px; color: #6b4228; text-shadow: 0 1px 0 #fff3e4; }
+.fpanel-sum { font-size: 11px; color: #6b4228; margin-left: auto; white-space: nowrap; }
+.fpanel-sum i { font-style: normal; font-weight: 700; padding: 0 4px; border-radius: 6px; }
+.fpanel-filter { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px dashed #f0d4b4; flex-wrap: wrap; }
+.fpanel-filter button { border: 2px solid var(--line); background: #fff8ef; border-radius: 999px; font-size: 12px; padding: 1px 10px; color: #6b4228; }
+.fpanel-filter button.on { background: var(--accent); border-color: var(--accent-2); color: #fff; }
+.fpanel-filter .muted { margin-left: auto; font-size: 11px; }
+.fpanel-body { overflow: auto; padding: 4px 8px 8px; }
+.fpanel-body h4 { margin: 8px 2px 4px; font-size: 12px; color: #a3866c; font-weight: 700; letter-spacing: 1px; }
+.fpanel-body ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.frow {
+  display: grid; grid-template-columns: 22px 1fr auto; grid-template-areas: 'icon name tag' 'icon status status';
+  gap: 0 6px; align-items: center; padding: 4px 6px; border-radius: 8px; border: 2px solid transparent; cursor: pointer;
+}
+.frow:hover { background: #fff1e2; border-color: #f6dcc0; }
+.ficon { grid-area: icon; font-size: 15px; text-align: center; }
+.fname { grid-area: name; font-size: 13px; font-weight: 600; }
+.ftag { grid-area: tag; font-size: 10.5px; font-weight: 700; padding: 0 7px; border-radius: 999px; white-space: nowrap; }
+.fstatus { grid-area: status; font-size: 11.5px; color: #8a6d55; line-height: 1.35; }
+.fwater { grid-column: 2 / 4; height: 5px; background: #f2e7da; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.fwater span { display: block; height: 100%; background: #5fa8d3; border-radius: 3px; }
+.fwater span.dry { background: #e0a33c; }
+.tag-busy, .st-busy { background: #e2f2d9; color: #4f8a3f; }
+.tag-on, .st-on { background: #fff0c9; color: #a7700f; }
+.tag-alert, .st-alert { background: #fde0d6; color: #c0502f; }
+.tag-idle { background: #f1ebe3; color: #a3907c; }
+.frow-idle .fname { color: #8a7562; font-weight: 500; }
+@media (max-width: 600px) {
+  .fpanel { width: calc(100% - 16px); }
+}

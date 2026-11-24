@@ -13,6 +13,8 @@ export interface RenderOpts {
   hover: { x: number; y: number } | null;
   alpha: number; // 插值 0..1
   now: number; // 毫秒，用于动画
+  /** 需要闪烁高亮的格子（从家具状态窗口定位） */
+  highlight?: { x: number; y: number }[];
 }
 
 type FloorKind = 'planks' | 'grid' | 'dots';
@@ -345,6 +347,21 @@ export function drawWorld(ctx: CanvasRenderingContext2D, w: World, o: RenderOpts
       const cells = f.type === 'lamp' ? [f.cells[0], ...(f.switchAt ? [f.switchAt] : [])] : f.cells;
       for (const c of cells) ctx.strokeRect(c.x * T + 1, c.y * T + 1, T - 2, T - 2);
     } else ctx.strokeRect(o.hover.x * T + 1, o.hover.y * T + 1, T - 2, T - 2);
+  }
+
+  // 定位高亮
+  if (o.highlight?.length) {
+    const pulse = 0.55 + 0.45 * Math.sin(o.now / 160);
+    ctx.save();
+    ctx.strokeStyle = `rgba(232,145,91,${pulse})`;
+    ctx.fillStyle = `rgba(255,214,150,${0.25 * pulse})`;
+    ctx.lineWidth = 3;
+    for (const c of o.highlight) {
+      rr(ctx, c.x * T - 2, c.y * T - 2, T + 4, T + 4, 6);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // 角色

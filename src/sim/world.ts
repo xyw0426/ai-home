@@ -1196,12 +1196,32 @@ export class World {
     return out;
   }
 
+  /** 家具当前的状态类别：使用中 / 开着 / 需要照料 / 空闲 */
+  furnitureState(f: FurnitureDef): 'busy' | 'on' | 'alert' | 'idle' {
+    const fs = this.fs[f.id];
+    if (f.type === 'plants') {
+      if ((fs.water ?? 1) < PLANT_YELLOW) return 'alert';
+      if (fs.users.length) return 'busy';
+      return fs.wateredAt !== undefined && this.t - fs.wateredAt < 15 * 60 ? 'on' : 'idle';
+    }
+    if (fs.users.length) return 'busy';
+    if (f.type === 'washer') return fs.mode === 'running' ? 'on' : 'idle';
+    if (f.type === 'table') return fs.mode === 'served' ? 'on' : fs.mode === 'dirty' ? 'alert' : 'idle';
+    if (f.type === 'lamp' && fs.on && this.occupants(f.room).length === 0 && !this.isDark()) return 'alert';
+    return fs.on ? 'on' : 'idle';
+  }
+
   furnitureStatus(f: FurnitureDef): string {
     const fs = this.fs[f.id];
     const names = fs.users.map((u) => this.agents[u].name).join('、');
     switch (f.type) {
-      case 'lamp':
-        return fs.on ? '灯亮着' : '灯关着';
+      case 'lamp': {
+        if (!fs.on) return '灯关着';
+        const inRoom = this.occupants(f.room).map((a) => a.name);
+        return inRoom.length ? `灯亮着，${inRoom.join('、')}在屋里` : '灯亮着，屋里没人';
+      }
+      case 'dock':
+        return this.agents.robot.x === f.spots[0].x && this.agents.robot.y === f.spots[0].y ? '小暖在充电' : '空着';
       case 'tv':
         return fs.on ? `开着${names ? `，${names}在看` : '，没人看'}` : '关着';
       case 'washer':
